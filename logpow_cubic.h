@@ -96,5 +96,3 @@ inline Vec_ps exp2_p3(const Vec_ps& x) {
         *frac + exp2_coeff_f_[3];
     return ldexp_ps(frac, floor.floor_pi32);
 }
-
-#undef fast_convert_to_pd
