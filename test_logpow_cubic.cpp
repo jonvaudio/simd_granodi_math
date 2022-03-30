@@ -23,10 +23,22 @@ int main() {
         printf("%f\t%f\n", std::log(xf), log_cm(Vec_ps{xf}).f0());
     }*/
 
-    for (int i = -10; i < 10; ++i) {
-        const float xf = static_cast<float>(i) * 2.3;
+    /*for (int i = -10; i < 10; ++i) {
+        const float xf = static_cast<float>(i) * 2.3f;
         printf("%f\t%f\n", std::exp(xf), exp_cm(Vec_ps{xf}).f0());
+    }*/
+
+    for (int i = -10; i < 10; ++i) {
+        const float xf = static_cast<float>(i) * 0.0314f;
+        sincos_result r = sincos_cm(xf);
+        printf("%f\t%f\n", std::sin(xf), r.sin_result.f0());
     }
+
+    /*for (int i = -10; i < 10; ++i) {
+        const float xf = static_cast<float>(i) * 0.0314f;
+        sincos_result r = sincos_cm(xf);
+        printf("%f\t%f\n", std::cos(xf), r.cos_result.f0());
+    }*/
 
     return 0;
 }

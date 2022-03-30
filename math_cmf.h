@@ -122,7 +122,7 @@ inline sincos_result sincos_cm(const Vec_ps& x) {
     cos_y = (cos_y*z*z - z*0.5f) + 1.0f;
 
     // Calculate sin
-    Vec_ps sin_y = (sincof_f_[0]*z + sincof_f_[1])*z * sincof_f_[2];
+    Vec_ps sin_y = (sincof_f_[0]*z + sincof_f_[1])*z + sincof_f_[2];
     sin_y = sin_y*z*xx + xx;
 
     // Choose results
