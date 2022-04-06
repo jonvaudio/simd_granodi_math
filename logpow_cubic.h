@@ -20,7 +20,7 @@ static constexpr float exp2_coeff_f_[] = { static_cast<float>(exp2_coeff_[0]),
     static_cast<float>(exp2_coeff_[1]), static_cast<float>(exp2_coeff_[2]),
     static_cast<float>(exp2_coeff_[3]) };
 
-inline Vec_pd log2_p3(const Vec_pd& x) {
+inline Vec_pd log2_p3_pd(const Vec_pd& x) {
     // .shuffle<3, 2, 2, 0>().convert_to_pd() is pi64 -> pi32 -> pd, but
     // avoiding the unneeded step of zero-ing the upper elements when calling
     // convert_to_pi32(). We do this to be consistent across platforms,
@@ -37,7 +37,7 @@ inline Vec_pd log2_p3(const Vec_pd& x) {
     return (x > 0.0).choose_else_zero(exponent + mantissa);
 }
 
-inline Vec_ps log2_p3(const Vec_ps& x) {
+inline Vec_ps log2_p3_ps(const Vec_ps& x) {
     Vec_ps exponent = ((x.bitcast_to_pi32().shift_rl_imm<23>() & 0xff) - 127)
         .convert_to_ps(),
     mantissa = ((x.bitcast_to_pi32() & 0x807fffff) | 0x3f800000)
@@ -49,16 +49,16 @@ inline Vec_ps log2_p3(const Vec_ps& x) {
     return (x > 0.0f).choose_else_zero(exponent + mantissa);
 }
 
-inline Vec_pd exp2_p3(const Vec_pd& x) {
-    floor_result_pd floor = floor_vec(x);
+inline Vec_pd exp2_p3_pd(const Vec_pd& x) {
+    floor_result_pd floor = floor_pd(x);
     Vec_pd frac = x - floor.floor_pd;
     frac = ((exp2_coeff_[0]*frac + exp2_coeff_[1])*frac + exp2_coeff_[2])
         *frac + exp2_coeff_[3];
     return ldexp_pd(frac, floor.floor_pi32);
 }
 
-inline Vec_ps exp2_p3(const Vec_ps& x) {
-    floor_result_ps floor = floor_vec(x);
+inline Vec_ps exp2_p3_ps(const Vec_ps& x) {
+    floor_result_ps floor = floor_ps(x);
     Vec_ps frac = x - floor.floor_ps;
     frac = ((exp2_coeff_f_[0]*frac + exp2_coeff_f_[1])*frac + exp2_coeff_f_[2])
         *frac + exp2_coeff_f_[3];

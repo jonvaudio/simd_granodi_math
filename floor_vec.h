@@ -15,7 +15,7 @@ struct floor_result_ps {
 };
 
 // Round towards minus infinity
-inline floor_result_pd floor_vec(const Vec_pd& x) {
+inline floor_result_pd floor_pd(const Vec_pd& x) {
     // We use pi32 here as truncating to pi64 is slow on SSE2 and we want cross
     // platform consistency too
     floor_result_pd result;
@@ -27,7 +27,7 @@ inline floor_result_pd floor_vec(const Vec_pd& x) {
     return result;
 }
 
-inline floor_result_ps floor_vec(const Vec_ps& x) {
+inline floor_result_ps floor_ps(const Vec_ps& x) {
     floor_result_ps result;
     result.floor_pi32 = x.truncate_to_pi32();
     result.floor_ps = result.floor_pi32.convert_to_ps();
