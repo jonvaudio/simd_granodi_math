@@ -145,25 +145,26 @@ struct sincosf_result_pd {
 inline sincosf_result_ps sincosf_cm_ps(const Vec_ps& x) {
     Vec_ps sin_signbit = x & Vec_ps::bitcast_from_u32(0x80000000),
         xx = x.abs();
-    floor_result_ps fr = floor_ps(xx * FOPI_f);
-    const Compare_pi32 floor_odd { (fr.floor_pi32 & 1) == 1 };
-    fr.floor_pi32 += floor_odd.choose_else_zero(1);
-    fr.floor_ps += floor_odd.bitcast_to_cmp_ps().choose_else_zero(1.0f);
+    Vec_pi32 floor_pi32 = (xx * FOPI_f).floor_to_pi32();
+    Vec_ps floor_ps = floor_pi32.convert_to_ps();
+    const Compare_pi32 floor_odd { (floor_pi32 & 1) == 1 };
+    floor_pi32 += floor_odd.choose_else_zero(1);
+    floor_ps += floor_odd.bitcast_to_cmp_ps().choose_else_zero(1.0f);
 
-    fr.floor_pi32 &= 7;
+    floor_pi32 &= 7;
 
-    const Compare_pi32 floor_gt3 { fr.floor_pi32 > 3 };
-    fr.floor_pi32 -= floor_gt3.choose_else_zero(4);
+    const Compare_pi32 floor_gt3 { floor_pi32 > 3 };
+    floor_pi32 -= floor_gt3.choose_else_zero(4);
     sin_signbit ^= floor_gt3.bitcast_to_cmp_ps()
         .choose_else_zero(Vec_ps::bitcast_from_u32(0x80000000));
     Vec_ps cos_signbit = floor_gt3.bitcast_to_cmp_ps()
         .choose_else_zero(Vec_ps::bitcast_from_u32(0x80000000));
 
-    const Compare_ps floor_gt1 = (fr.floor_pi32 > 1).bitcast_to_cmp_ps();
+    const Compare_ps floor_gt1 = (floor_pi32 > 1).bitcast_to_cmp_ps();
     cos_signbit ^= floor_gt1.choose_else_zero(
         Vec_ps::bitcast_from_u32(0x80000000));
 
-    xx -= fr.floor_ps*dp1_f_ + fr.floor_ps*dp2_f_ + fr.floor_ps*dp3_f_;
+    xx -= floor_ps*dp1_f_ + floor_ps*dp2_f_ + floor_ps*dp3_f_;
     Vec_ps z = xx * xx;
 
     // Calculate cos
@@ -175,7 +176,7 @@ inline sincosf_result_ps sincosf_cm_ps(const Vec_ps& x) {
     sin_y = sin_y*z*xx + xx;
 
     // Choose results
-    Compare_ps swap_results = ((fr.floor_pi32 == 1) || (fr.floor_pi32 == 2))
+    Compare_ps swap_results = ((floor_pi32 == 1) || (floor_pi32 == 2))
         .bitcast_to_cmp_ps();
     sincosf_result_ps result;
     result.sin_result = swap_results.choose(cos_y, sin_y);
@@ -191,26 +192,27 @@ inline sincosf_result_ps sincosf_cm_ps(const Vec_ps& x) {
 inline sincosf_result_pd sincosf_cm_pd(const Vec_pd& x) {
     Vec_pd sin_signbit = x & Vec_pd::bitcast_from_u64(0x8000000000000000),
         xx = x.abs();
-    floor_result_pd fr = floor_pd(xx * FOPI);
-    Compare_pi32 floor_odd { (fr.floor_pi32 & 1) == 1 };
-    fr.floor_pi32 += floor_odd.choose_else_zero(1);
-    fr.floor_pd += floor_odd.convert_to_cmp_pd().choose_else_zero(1.0);
+    Vec_pi32 floor_pi32 = (xx * FOPI).floor_to_pi32();
+    Vec_pd floor_pd = floor_pi32.convert_to_pd();
+    Compare_pi32 floor_odd { (floor_pi32 & 1) == 1 };
+    floor_pi32 += floor_odd.choose_else_zero(1);
+    floor_pd += floor_odd.convert_to_cmp_pd().choose_else_zero(1.0);
 
-    fr.floor_pi32 &= 7;
+    floor_pi32 &= 7;
 
-    const Compare_pi32 floor_gt3 { fr.floor_pi32 > 3 };
-    fr.floor_pi32 -= floor_gt3.choose_else_zero(4);
+    const Compare_pi32 floor_gt3 { floor_pi32 > 3 };
+    floor_pi32 -= floor_gt3.choose_else_zero(4);
     const Compare_pd floor_gt3_pd = floor_gt3.convert_to_cmp_pd();
     sin_signbit ^= floor_gt3_pd.choose_else_zero(
         Vec_pd::bitcast_from_u64(0x8000000000000000));
     Vec_pd cos_signbit = floor_gt3_pd.choose_else_zero(
         Vec_pd::bitcast_from_u64(0x8000000000000000));
 
-    const Compare_pd floor_gt1 = (fr.floor_pi32 > 1).convert_to_cmp_pd();
+    const Compare_pd floor_gt1 = (floor_pi32 > 1).convert_to_cmp_pd();
     cos_signbit ^= floor_gt1.choose_else_zero(
         Vec_pd::bitcast_from_u64(0x8000000000000000));
 
-    xx -= fr.floor_pd*dp1_ + fr.floor_pd*dp2_ + fr.floor_pd*dp3_;
+    xx -= floor_pd*dp1_ + floor_pd*dp2_ + floor_pd*dp3_;
     Vec_pd z = xx * xx;
 
     Vec_pd cos_y = (coscof_[0]*z + coscof_[1])*z + coscof_[2];
@@ -219,7 +221,7 @@ inline sincosf_result_pd sincosf_cm_pd(const Vec_pd& x) {
     Vec_pd sin_y = (sincof_[0]*z + sincof_[1])*z + sincof_[2];
     sin_y = sin_y*z*xx + xx;
 
-    Compare_pd swap_results = ((fr.floor_pi32 == 1) || (fr.floor_pi32 == 2))
+    Compare_pd swap_results = ((floor_pi32 == 1) || (floor_pi32 == 2))
         .convert_to_cmp_pd();
     sincosf_result_pd result;
     result.sin_result = swap_results.choose(cos_y, sin_y);

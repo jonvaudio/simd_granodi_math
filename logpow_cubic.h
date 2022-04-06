@@ -1,6 +1,5 @@
 #pragma once
 
-#include "floor_vec.h"
 #include "frexp_ldexp_vec.h"
 
 using namespace simd_granodi;
@@ -50,17 +49,19 @@ inline Vec_ps log2_p3_ps(const Vec_ps& x) {
 }
 
 inline Vec_pd exp2_p3_pd(const Vec_pd& x) {
-    floor_result_pd floor = floor_pd(x);
-    Vec_pd frac = x - floor.floor_pd;
+    const Vec_pi32 floor_pi32 = x.floor_to_pi32();
+    const Vec_pd floor_pd = floor_pi32.convert_to_pd();
+    Vec_pd frac = x - floor_pd;
     frac = ((exp2_coeff_[0]*frac + exp2_coeff_[1])*frac + exp2_coeff_[2])
         *frac + exp2_coeff_[3];
-    return ldexp_pd(frac, floor.floor_pi32);
+    return ldexp_pd(frac, floor_pi32);
 }
 
 inline Vec_ps exp2_p3_ps(const Vec_ps& x) {
-    floor_result_ps floor = floor_ps(x);
-    Vec_ps frac = x - floor.floor_ps;
+    const Vec_pi32 floor_pi32 = x.floor_to_pi32();
+    const Vec_ps floor_ps = floor_pi32.convert_to_ps();
+    Vec_ps frac = x - floor_ps;
     frac = ((exp2_coeff_f_[0]*frac + exp2_coeff_f_[1])*frac + exp2_coeff_f_[2])
         *frac + exp2_coeff_f_[3];
-    return ldexp_ps(frac, floor.floor_pi32);
+    return ldexp_ps(frac, floor_pi32);
 }
