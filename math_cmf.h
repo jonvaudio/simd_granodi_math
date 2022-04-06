@@ -207,7 +207,8 @@ inline sincosf_result_pd sincosf_cm_pd(const Vec_pd& x) {
         Vec_pd::bitcast_from_u64(0x8000000000000000));
 
     const Compare_pd floor_gt1 = (fr.floor_pi32 > 1).convert_to_cmp_pd();
-    cos_signbit ^= floor_gt1.choose_else_zero(0x8000000000000000);
+    cos_signbit ^= floor_gt1.choose_else_zero(
+        Vec_pd::bitcast_from_u64(0x8000000000000000));
 
     xx -= fr.floor_pd*dp1_ + fr.floor_pd*dp2_ + fr.floor_pd*dp3_;
     Vec_pd z = xx * xx;
