@@ -24,9 +24,15 @@ void test_func(const int start, const int stop, const double scale,
 int main() {
     std::string file_prefix;
     #ifdef SIMD_GRANODI_SSE2
-    file_prefix += "sse2_tests/";
+    file_prefix += "sse2_tests";
     #elif defined SIMD_GRANODI_NEON
-    file_prefix += "neon_tests/";
+    file_prefix += "neon_tests";
+    #endif
+
+    #ifdef TEST_OPT
+    file_prefix += "_opt/";
+    #else
+    file_prefix += "_dbg/";
     #endif
 
     test_func(0, 20000, 0.01, file_prefix + "log2_p3_pd_test.txt",
