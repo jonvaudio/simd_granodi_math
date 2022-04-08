@@ -1,1 +1,2 @@
 rm test_opt test_dbg
+#rm test_opt.s test_dbg.s

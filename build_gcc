@@ -1,2 +1,6 @@
 g++ -o test_opt test_logpow_cubic.cpp -Wall -Wextra -std=c++11 -O3 -lm -D TEST_OPT
 g++ -o test_dbg test_logpow_cubic.cpp -Wall -Wextra -std=c++11 -lm
+
+# asm
+#g++ -S -o test_opt.s test_logpow_cubic.cpp -fverbose-asm -Wall -Wextra -std=c++11 -O3 -lm -D TEST_OPT
+#g++ -S -o test_dbg.s test_logpow_cubic.cpp -fverbose-asm -Wall -Wextra -std=c++11 -lm
