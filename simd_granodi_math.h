@@ -65,7 +65,7 @@ static constexpr float exp2_coeff_f_[] = { static_cast<float>(exp2_coeff_[0]),
     static_cast<float>(exp2_coeff_[1]), static_cast<float>(exp2_coeff_[2]),
     static_cast<float>(exp2_coeff_[3]) };
 
-inline Vec_pd log2_p3_pd(const Vec_pd& x) {
+inline Vec_pd log2_p3(const Vec_pd& x) {
     // .shuffle<3, 2, 2, 0>().convert_to_pd() is pi64 -> pi32 -> pd, but
     // avoiding the unneeded step of zero-ing the upper elements when calling
     // convert_to_pi32(). We do this to be consistent across platforms,
@@ -82,7 +82,7 @@ inline Vec_pd log2_p3_pd(const Vec_pd& x) {
     return (x > 0.0).choose_else_zero(exponent + mantissa);
 }
 
-inline Vec_ps log2_p3_ps(const Vec_ps& x) {
+inline Vec_ps log2_p3(const Vec_ps& x) {
     Vec_ps exponent = ((x.bitcast_to_pi32().shift_rl_imm<23>() & 0xff) - 127)
         .convert_to_ps(),
     mantissa = ((x.bitcast_to_pi32() & 0x807fffff) | 0x3f800000)
@@ -94,7 +94,7 @@ inline Vec_ps log2_p3_ps(const Vec_ps& x) {
     return (x > 0.0f).choose_else_zero(exponent + mantissa);
 }
 
-inline Vec_pd exp2_p3_pd(const Vec_pd& x) {
+inline Vec_pd exp2_p3(const Vec_pd& x) {
     const Vec_pi32 floor_pi32 = x.floor_to_pi32();
     const Vec_pd floor_pd = floor_pi32.convert_to_pd();
     Vec_pd frac = x - floor_pd;
@@ -103,13 +103,33 @@ inline Vec_pd exp2_p3_pd(const Vec_pd& x) {
     return ldexp_pd(frac, floor_pi32);
 }
 
-inline Vec_ps exp2_p3_ps(const Vec_ps& x) {
+inline Vec_ps exp2_p3(const Vec_ps& x) {
     const Vec_pi32 floor_pi32 = x.floor_to_pi32();
     const Vec_ps floor_ps = floor_pi32.convert_to_ps();
     Vec_ps frac = x - floor_ps;
     frac = ((exp2_coeff_f_[0]*frac + exp2_coeff_f_[1])*frac + exp2_coeff_f_[2])
         *frac + exp2_coeff_f_[3];
     return ldexp_ps(frac, floor_pi32);
+}
+
+inline float log2_p3(const float x) { return log2_p3(Vec_ps{x}).f0(); }
+inline double log2_p3(const double x) { return log2_p3(Vec_pd{x}).d0(); }
+inline float exp2_p3(const float x) { return exp2_p3(Vec_ps{x}).f0(); }
+inline double exp2_p3(const double x) { return exp2_p3(Vec_pd{x}).d0(); }
+
+static constexpr double exp2_to_exp_scale_pre_ = 6.931471805599453e-1;
+
+inline float exp_p3(const float x) {
+    return exp2_p3(Vec_ps{x * static_cast<float>(exp2_to_exp_scale_pre_)}).f0();
+}
+inline double exp_p3(const double x) {
+    return exp2_p3(Vec_pd{x * exp2_to_exp_scale_pre_}).d0();
+}
+inline Vec_ps exp_p3(const Vec_ps& x) {
+    return exp2_p3(x * static_cast<float>(exp2_to_exp_scale_pre_));
+}
+inline Vec_pd exp_p3(const Vec_pd& x) {
+    return exp2_p3(x * exp2_to_exp_scale_pre_);
 }
 
 //
@@ -160,7 +180,7 @@ static constexpr double coscof_[] = { 2.443315711809948e-5,
 static constexpr float coscof_f_[] = { static_cast<float>(coscof_[0]),
     static_cast<float>(coscof_[1]), static_cast<float>(coscof_[2]) };
 
-inline Vec_ps logf_cm_ps(const Vec_ps& x) {
+inline Vec_ps logf_cm(const Vec_ps& x) {
     frexp_result_ps fr = frexp_ps(x);
     Compare_ps x_lt_sqrth { x < SQRTH_f };
     Vec_ps e = fr.exponent.convert_to_ps() - x_lt_sqrth.choose_else_zero(1.0f);
@@ -184,7 +204,7 @@ inline Vec_ps logf_cm_ps(const Vec_ps& x) {
 
 // This is the exact same float algorithm, but using doubles. Does NOT
 // have the accuracy of doubles, but is smoother than wrapping the float alg
-inline Vec_pd logf_cm_pd(const Vec_pd& x) {
+inline Vec_pd logf_cm(const Vec_pd& x) {
     frexp_result_pd fr = frexp_pd(x);
     Compare_pd x_lt_sqrth { x < SQRTH };
     Vec_pd e = fr.exponent.convert_to_pd() - x_lt_sqrth.choose_else_zero(1.0);
@@ -206,7 +226,7 @@ inline Vec_pd logf_cm_pd(const Vec_pd& x) {
      return (x > 0.0).choose_else_zero(z);
 }
 
-inline Vec_ps expf_cm_ps(const Vec_ps& x) {
+inline Vec_ps expf_cm(const Vec_ps& x) {
     Vec_ps xx = x;
     Vec_ps z = xx * log2e_f_;
 
@@ -226,7 +246,7 @@ inline Vec_ps expf_cm_ps(const Vec_ps& x) {
     return ldexp_ps(z, n);
 }
 
-inline Vec_pd expf_cm_pd(const Vec_pd& x) {
+inline Vec_pd expf_cm(const Vec_pd& x) {
     Vec_pd xx = x;
     Vec_pd z = xx * log2e_;
 
@@ -247,16 +267,16 @@ inline Vec_pd expf_cm_pd(const Vec_pd& x) {
     return ldexp_pd(z, n);
 }
 
-struct sincosf_result_ps {
-    Vec_ps sin_result, cos_result;
-};
+inline float logf_cm(const float x) { return logf_cm(Vec_ps{x}).f0(); }
+inline double logf_cm(const double x) { return logf_cm(Vec_pd{x}).d0(); }
+inline float expf_cm(const float x) { return expf_cm(Vec_ps{x}).f0(); }
+inline double expf_cm(const double x) { return expf_cm(Vec_pd{x}).d0(); }
 
-struct sincosf_result_pd {
-    Vec_pd sin_result, cos_result;
-};
+struct sincosf_result_ps { Vec_ps sin_result, cos_result; };
+struct sincosf_result_pd { Vec_pd sin_result, cos_result; };
 
 // Breaks for x > 8192
-inline sincosf_result_ps sincosf_cm_ps(const Vec_ps& x) {
+inline sincosf_result_ps sincosf_cm(const Vec_ps& x) {
     Vec_ps sin_signbit = x & Vec_ps::bitcast_from_u32(0x80000000),
         xx = x.abs();
     Vec_pi32 floor_pi32 = (xx * FOPI_f).floor_to_pi32();
@@ -303,7 +323,7 @@ inline sincosf_result_ps sincosf_cm_ps(const Vec_ps& x) {
     return result;
 }
 
-inline sincosf_result_pd sincosf_cm_pd(const Vec_pd& x) {
+inline sincosf_result_pd sincosf_cm(const Vec_pd& x) {
     Vec_pd sin_signbit = x & Vec_pd::bitcast_from_u64(0x8000000000000000),
         xx = x.abs();
     Vec_pi32 floor_pi32 = (xx * FOPI).floor_to_pi32();
@@ -347,17 +367,41 @@ inline sincosf_result_pd sincosf_cm_pd(const Vec_pd& x) {
     return result;
 }
 
-inline Vec_ps sinf_cm_ps(const Vec_ps& x) {
-    return sincosf_cm_ps(x).sin_result;
+inline Vec_ps sinf_cm(const Vec_ps& x) { return sincosf_cm(x).sin_result; }
+inline Vec_ps cosf_cm(const Vec_ps& x) { return sincosf_cm(x).cos_result; }
+inline Vec_pd sinf_cm(const Vec_pd& x) { return sincosf_cm(x).sin_result; }
+inline Vec_pd cosf_cm(const Vec_pd& x) { return sincosf_cm(x).cos_result; }
+
+inline float sinf_cm(const float x) {
+    return sincosf_cm(Vec_ps{x}).sin_result.f0();
 }
-inline Vec_ps cosf_cm_ps(const Vec_ps& x) {
-    return sincosf_cm_ps(x).cos_result;
+inline float cosf_cm(const float x) {
+    return sincosf_cm(Vec_ps{x}).cos_result.f0();
 }
-inline Vec_pd sinf_cm_pd(const Vec_pd& x) {
-    return sincosf_cm_pd(x).sin_result;
+inline double sinf_cm(const double x) {
+    return sincosf_cm(Vec_pd{x}).sin_result.d0();
 }
-inline Vec_pd cosf_cm_pd(const Vec_pd& x) {
-    return sincosf_cm_pd(x).cos_result;
+inline double cosf_cm(const double x) {
+    return sincosf_cm(Vec_pd{x}).cos_result.d0();
+}
+
+struct sincosf_result_f { float sin_result, cos_result; };
+struct sincosf_result_d { double sin_result, cos_result; };
+
+inline sincosf_result_f sincosf_cm(const float x) {
+    sincosf_result_ps r = sincosf_cm(Vec_ps{x});
+    sincosf_result_f result;
+    result.sin_result = r.sin_result.f0();
+    result.cos_result = r.cos_result.f0();
+    return result;
+}
+
+inline sincosf_result_d sincosf_cm(const double x) {
+    sincosf_result_pd r = sincosf_cm(Vec_pd{x});
+    sincosf_result_d result;
+    result.sin_result = r.sin_result.d0();
+    result.cos_result = r.sin_result.d0();
+    return result;
 }
 
 } // namespace simd_granodi
