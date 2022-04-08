@@ -2,8 +2,9 @@
 #include <cstdio>
 #include <functional>
 #include <string>
-#include "logpow_cubic.h"
-#include "math_cmf.h"
+#include "simd_granodi_math.h"
+
+using namespace simd_granodi;
 
 void test_func(const int start, const int stop, const double scale,
     const std::string filename_pd, const std::string filename_ps,
