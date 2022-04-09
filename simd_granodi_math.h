@@ -54,29 +54,19 @@ inline Vec_ps ldexp_ps(const Vec_ps& x, const Vec_pi32& e) {
 // Calculate log2(x) for x in [1, 2]
 static constexpr double log2_coeff_[] = { 1.6404256133344508e-1,
     -1.0988652862227437, 3.1482979293341158, -2.2134752044448169 };
-static constexpr float log2_coeff_f_[] = { static_cast<float>(log2_coeff_[0]),
-    static_cast<float>(log2_coeff_[1]), static_cast<float>(log2_coeff_[2]),
-    static_cast<float>(log2_coeff_[3]) };
 
 // Calculate exp2(x) for x in [0, 1]
 static constexpr double exp2_coeff_[] = { 7.944154167983597e-2,
     2.2741127776021886e-1, 6.931471805599453e-1, 1.0 };
-static constexpr float exp2_coeff_f_[] = { static_cast<float>(exp2_coeff_[0]),
-    static_cast<float>(exp2_coeff_[1]), static_cast<float>(exp2_coeff_[2]),
-    static_cast<float>(exp2_coeff_[3]) };
 
 inline Vec_pd log2_p3(const Vec_pd& x) {
-    // .shuffle<3, 2, 2, 0>().convert_to_pd() is pi64 -> pi32 -> pd, but
-    // avoiding the unneeded step of zero-ing the upper elements when calling
-    // convert_to_pi32(). We do this to be consistent across platforms,
-    // as pi64 -> pd is slow on SSE2
     Vec_pd exponent = ((x.bitcast_to_pi64().shift_rl_imm<52>() & 0x7ff) - 1023)
-        .bitcast_to_pi32().shuffle<3, 2, 2, 0>().convert_to_pd(),
+        .convert_to_pi32().convert_to_pd(),
     mantissa = ((x.bitcast_to_pi64() & 0x800fffffffffffff)
         | 0x3ff0000000000000).bitcast_to_pd();
 
-    mantissa = ((log2_coeff_[0]*mantissa + log2_coeff_[1])*mantissa +
-        log2_coeff_[2])*mantissa + log2_coeff_[3];
+    mantissa = mantissa.mul_add(log2_coeff_[0], log2_coeff_[1])
+        .mul_add(mantissa, log2_coeff_[2]).mul_add(mantissa, log2_coeff_[3]);
 
     // Return zero for invalid input instead of -inf, for practical DSP reasons
     return (x > 0.0).choose_else_zero(exponent + mantissa);
@@ -88,8 +78,9 @@ inline Vec_ps log2_p3(const Vec_ps& x) {
     mantissa = ((x.bitcast_to_pi32() & 0x807fffff) | 0x3f800000)
         .bitcast_to_ps();
 
-    mantissa = ((log2_coeff_f_[0]*mantissa + log2_coeff_f_[1])*mantissa +
-        log2_coeff_f_[2])*mantissa + log2_coeff_f_[3];
+    mantissa = mantissa.mul_add(Vec_ps{log2_coeff_[0]}, Vec_ps{log2_coeff_[1]})
+        .mul_add(mantissa, Vec_ps{log2_coeff_[2]})
+        .mul_add(mantissa, Vec_ps{log2_coeff_[3]});
 
     return (x > 0.0f).choose_else_zero(exponent + mantissa);
 }
@@ -98,8 +89,8 @@ inline Vec_pd exp2_p3(const Vec_pd& x) {
     const Vec_pi32 floor_pi32 = x.floor_to_pi32();
     const Vec_pd floor_pd = floor_pi32.convert_to_pd();
     Vec_pd frac = x - floor_pd;
-    frac = ((exp2_coeff_[0]*frac + exp2_coeff_[1])*frac + exp2_coeff_[2])
-        *frac + exp2_coeff_[3];
+    frac = frac.mul_add(exp2_coeff_[0], exp2_coeff_[1])
+        .mul_add(frac, exp2_coeff_[2]).mul_add(frac, exp2_coeff_[3]);
     return ldexp_pd(frac, floor_pi32);
 }
 
@@ -107,8 +98,10 @@ inline Vec_ps exp2_p3(const Vec_ps& x) {
     const Vec_pi32 floor_pi32 = x.floor_to_pi32();
     const Vec_ps floor_ps = floor_pi32.convert_to_ps();
     Vec_ps frac = x - floor_ps;
-    frac = ((exp2_coeff_f_[0]*frac + exp2_coeff_f_[1])*frac + exp2_coeff_f_[2])
-        *frac + exp2_coeff_f_[3];
+    frac = frac.mul_add(static_cast<float>(exp2_coeff_[0]),
+            static_cast<float>(exp2_coeff_[1]))
+        .mul_add(frac, static_cast<float>(exp2_coeff_[2]))
+        .mul_add(frac, static_cast<float>(exp2_coeff_[3]));
     return ldexp_ps(frac, floor_pi32);
 }
 
@@ -137,67 +130,51 @@ inline Vec_pd exp_p3(const Vec_pd& x) {
 // CEPHES MATH LIBRARY 32-BIT FLOAT IMPLEMENTATIONS
 
 static constexpr double SQRTH = 7.07106781186547524401e-1;
-static constexpr float SQRTH_f = static_cast<float>(SQRTH);
 
 // log constants
-static constexpr double log_f_coeff_[] = { 7.0376836292e-2, -1.1514610310e-1,
+static constexpr double logf_coeff_[] = { 7.0376836292e-2, -1.1514610310e-1,
     1.1676998740e-1, -1.2420140846e-1, 1.4249322787e-1, -1.6668057665e-1,
     2.0000714765e-1, -2.4999993993e-1, 3.3333331174e-1, 0.0 };
-static constexpr float log_f_coeff_f_[] ={ static_cast<float>(log_f_coeff_[0]),
-    static_cast<float>(log_f_coeff_[1]), static_cast<float>(log_f_coeff_[2]),
-    static_cast<float>(log_f_coeff_[3]), static_cast<float>(log_f_coeff_[4]),
-    static_cast<float>(log_f_coeff_[5]), static_cast<float>(log_f_coeff_[6]),
-    static_cast<float>(log_f_coeff_[7]), static_cast<float>(log_f_coeff_[8]),
-    static_cast<float>(log_f_coeff_[9]) };
 static constexpr double log_q1_ = -2.12194440e-4;
-static constexpr float log_q1_f_ = static_cast<float>(log_q1_);
 static constexpr double log_q2_ = 6.93359375e-1;
-static constexpr float log_q2_f_ = static_cast<float>(log_q2_);
 
 // exp constants
 static constexpr double log2e_ = 1.44269504088896341; // log2(e)
-static constexpr float log2e_f_ = static_cast<float>(log2e_);
-static constexpr double exp_f_coeff_[] = { 1.9875691500e-4, 1.3981999507e-3,
+static constexpr double expf_coeff_[] = { 1.9875691500e-4, 1.3981999507e-3,
     8.3334519073e-3, 4.1665795894e-2, 1.6666665459e-1, 5.0000001201e-1 };
-static constexpr float exp_f_coeff_f_[] = {
-    static_cast<float>(exp_f_coeff_[0]), static_cast<float>(exp_f_coeff_[1]),
-    static_cast<float>(exp_f_coeff_[2]), static_cast<float>(exp_f_coeff_[3]),
-    static_cast<float>(exp_f_coeff_[4]), static_cast<float>(exp_f_coeff_[5]) };
 
 // sincos constants
 static constexpr double FOPI = 1.27323954473516; // 4/pi
-static constexpr float FOPI_f = static_cast<float>(FOPI);
 static constexpr double dp1_ = 0.78515625, dp2_ = 2.4187564849853515625e-4,
     dp3_ = 3.77489497744594108e-8;
-static constexpr float dp1_f_ = static_cast<float>(dp1_),
-    dp2_f_ = static_cast<float>(dp2_), dp3_f_ = static_cast<float>(dp3_);
 static constexpr double sincof_[] = { -1.9515295891e-4, 8.3321608736e-3,
     -1.6666654611e-1 };
-static constexpr float sincof_f_[] = { static_cast<float>(sincof_[0]),
-    static_cast<float>(sincof_[1]), static_cast<float>(sincof_[2])};
 static constexpr double coscof_[] = { 2.443315711809948e-5,
     -1.388731625493765e-3, 4.166664568298827e-2 };
-static constexpr float coscof_f_[] = { static_cast<float>(coscof_[0]),
-    static_cast<float>(coscof_[1]), static_cast<float>(coscof_[2]) };
 
 inline Vec_ps logf_cm(const Vec_ps& x) {
     frexp_result_ps fr = frexp_ps(x);
-    Compare_ps x_lt_sqrth { x < SQRTH_f };
+    Compare_ps x_lt_sqrth { x < SQRTH };
     Vec_ps e = fr.exponent.convert_to_ps() - x_lt_sqrth.choose_else_zero(1.0f);
     fr.mantissa = (fr.mantissa + x_lt_sqrth.choose_else_zero(fr.mantissa))
         - 1.0f;
 
     Vec_ps z = fr.mantissa * fr.mantissa;
 
-    Vec_ps y = ((((((((log_f_coeff_f_[0]*fr.mantissa + log_f_coeff_f_[1])
-        * fr.mantissa + log_f_coeff_f_[2])*fr.mantissa + log_f_coeff_f_[3])
-        * fr.mantissa + log_f_coeff_f_[4])*fr.mantissa + log_f_coeff_f_[5])
-        * fr.mantissa + log_f_coeff_f_[6])*fr.mantissa + log_f_coeff_f_[7])
-        * fr.mantissa + log_f_coeff_f_[8])*fr.mantissa + log_f_coeff_f_[9];
+    Vec_ps y = fr.mantissa.mul_add(static_cast<float>(logf_coeff_[0]),
+            static_cast<float>(logf_coeff_[1]))
+        .mul_add(fr.mantissa, static_cast<float>(logf_coeff_[2]))
+        .mul_add(fr.mantissa, static_cast<float>(logf_coeff_[3]))
+        .mul_add(fr.mantissa, static_cast<float>(logf_coeff_[4]))
+        .mul_add(fr.mantissa, static_cast<float>(logf_coeff_[5]))
+        .mul_add(fr.mantissa, static_cast<float>(logf_coeff_[6]))
+        .mul_add(fr.mantissa, static_cast<float>(logf_coeff_[7]))
+        .mul_add(fr.mantissa, static_cast<float>(logf_coeff_[8]))
+        .mul_add(fr.mantissa, static_cast<float>(logf_coeff_[9]));
     y *= z;
-    y += e*log_q1_f_ - 0.5f*z;
+    y += e*static_cast<float>(log_q1_) - 0.5f*z;
 
-    z = fr.mantissa + y + e*log_q2_f_;
+    z = fr.mantissa + y + e*static_cast<float>(log_q2_);
 
     return (x > 0.0f).choose_else_zero(z);
 }
@@ -213,33 +190,40 @@ inline Vec_pd logf_cm(const Vec_pd& x) {
 
     Vec_pd z = fr.mantissa * fr.mantissa;
 
-    Vec_pd y = ((((((((log_f_coeff_[0]*fr.mantissa + log_f_coeff_[1])
-        * fr.mantissa + log_f_coeff_[2])*fr.mantissa + log_f_coeff_[3])
-        * fr.mantissa + log_f_coeff_[4])*fr.mantissa + log_f_coeff_[5])
-        * fr.mantissa + log_f_coeff_[6])*fr.mantissa + log_f_coeff_[7])
-        * fr.mantissa + log_f_coeff_[8])*fr.mantissa + log_f_coeff_[9];
-     y *= z;
-     y += e*log_q1_ - 0.5*z;
+    Vec_pd y = fr.mantissa.mul_add(logf_coeff_[0], logf_coeff_[1])
+        .mul_add(fr.mantissa, logf_coeff_[2])
+        .mul_add(fr.mantissa, logf_coeff_[3])
+        .mul_add(fr.mantissa, logf_coeff_[4])
+        .mul_add(fr.mantissa, logf_coeff_[5])
+        .mul_add(fr.mantissa, logf_coeff_[6])
+        .mul_add(fr.mantissa, logf_coeff_[7])
+        .mul_add(fr.mantissa, logf_coeff_[8])
+        .mul_add(fr.mantissa, logf_coeff_[9]);
+    y *= z;
+    y += e*log_q1_ - 0.5*z;
 
-     z = fr.mantissa + y + e*log_q2_;
+    z = fr.mantissa + y + e*log_q2_;
 
-     return (x > 0.0).choose_else_zero(z);
+    return (x > 0.0).choose_else_zero(z);
 }
 
 inline Vec_ps expf_cm(const Vec_ps& x) {
     Vec_ps xx = x;
-    Vec_ps z = xx * log2e_f_;
+    Vec_ps z = xx * static_cast<float>(log2e_);
 
     Vec_pi32 n = z.convert_to_nearest_pi32();
     z = n.convert_to_ps();
 
-    xx -= z*log_q2_f_ + z*log_q1_f_;
+    xx -= z*static_cast<float>(log_q2_) + z*static_cast<float>(log_q1_);
     z = xx * xx;
     Vec_ps tmp_z = z;
 
-    z = ((((exp_f_coeff_f_[0]*xx + exp_f_coeff_f_[1])*xx
-        + exp_f_coeff_f_[2])*xx + exp_f_coeff_f_[3])*xx
-        + exp_f_coeff_f_[4])*xx + exp_f_coeff_f_[5];
+    z = xx.mul_add(static_cast<float>(expf_coeff_[0]),
+            static_cast<float>(expf_coeff_[1]))
+        .mul_add(xx, static_cast<float>(expf_coeff_[2]))
+        .mul_add(xx, static_cast<float>(expf_coeff_[3]))
+        .mul_add(xx, static_cast<float>(expf_coeff_[4]))
+        .mul_add(xx, static_cast<float>(expf_coeff_[5]));
     z *= tmp_z;
     z += xx + 1.0f;
 
@@ -257,9 +241,9 @@ inline Vec_pd expf_cm(const Vec_pd& x) {
     z = xx * xx;
     Vec_pd tmp_z = z;
 
-    z = ((((exp_f_coeff_[0]*xx + exp_f_coeff_[1])*xx
-        + exp_f_coeff_[2])*xx + exp_f_coeff_[3])*xx
-        + exp_f_coeff_[4])*xx + exp_f_coeff_[5];
+    z = xx.mul_add(expf_coeff_[0], expf_coeff_[1])
+        .mul_add(xx, expf_coeff_[2]).mul_add(xx, expf_coeff_[3])
+        .mul_add(xx, expf_coeff_[4]).mul_add(xx, expf_coeff_[5]);
 
     z *= tmp_z;
     z += xx + 1.0;
@@ -279,7 +263,7 @@ struct sincosf_result_pd { Vec_pd sin_result, cos_result; };
 inline sincosf_result_ps sincosf_cm(const Vec_ps& x) {
     Vec_ps sin_signbit = x & Vec_ps::bitcast_from_u32(0x80000000),
         xx = x.abs();
-    Vec_pi32 floor_pi32 = (xx * FOPI_f).floor_to_pi32();
+    Vec_pi32 floor_pi32 = (xx * static_cast<float>(FOPI)).floor_to_pi32();
     Vec_ps floor_ps = floor_pi32.convert_to_ps();
     const Compare_pi32 floor_odd { (floor_pi32 & 1) == 1 };
     floor_pi32 += floor_odd.choose_else_zero(1);
@@ -298,15 +282,19 @@ inline sincosf_result_ps sincosf_cm(const Vec_ps& x) {
     cos_signbit ^= floor_gt1.choose_else_zero(
         Vec_ps::bitcast_from_u32(0x80000000));
 
-    xx -= floor_ps*dp1_f_ + floor_ps*dp2_f_ + floor_ps*dp3_f_;
+    xx -= floor_ps*static_cast<float>(dp1_)
+        + floor_ps*static_cast<float>(dp2_)
+        + floor_ps*static_cast<float>(dp3_);
     Vec_ps z = xx * xx;
 
     // Calculate cos
-    Vec_ps cos_y = (coscof_f_[0]*z + coscof_f_[1])*z + coscof_f_[2];
+    Vec_ps cos_y = z.mul_add(static_cast<float>(coscof_[0]),
+        static_cast<float>(coscof_[1])).mul_add(z, coscof_[2]);
     cos_y = (cos_y*z*z - z*0.5f) + 1.0f;
 
     // Calculate sin
-    Vec_ps sin_y = (sincof_f_[0]*z + sincof_f_[1])*z + sincof_f_[2];
+    Vec_ps sin_y = z.mul_add(static_cast<float>(sincof_[0]),
+        static_cast<float>(sincof_[1])).mul_add(z, sincof_[2]);
     sin_y = sin_y*z*xx + xx;
 
     // Choose results
@@ -349,10 +337,10 @@ inline sincosf_result_pd sincosf_cm(const Vec_pd& x) {
     xx -= floor_pd*dp1_ + floor_pd*dp2_ + floor_pd*dp3_;
     Vec_pd z = xx * xx;
 
-    Vec_pd cos_y = (coscof_[0]*z + coscof_[1])*z + coscof_[2];
+    Vec_pd cos_y = z.mul_add(coscof_[0], coscof_[1]).mul_add(z, coscof_[2]);
     cos_y = (cos_y*z*z - z*0.5f) + 1.0;
 
-    Vec_pd sin_y = (sincof_[0]*z + sincof_[1])*z + sincof_[2];
+    Vec_pd sin_y = z.mul_add(sincof_[0], sincof_[1]).mul_add(z, sincof_[2]);
     sin_y = sin_y*z*xx + xx;
 
     Compare_pd swap_results = ((floor_pi32 == 1) || (floor_pi32 == 2))

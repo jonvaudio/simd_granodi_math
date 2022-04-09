@@ -2572,6 +2572,39 @@ static inline sg_pd sg_div_pd(const sg_pd a, const sg_pd b) {
 #define sg_div_pd vdivq_f64
 #endif
 
+// a * b + c
+// Optionally fused on architectures that have it. May add the AVX version in
+// future.
+// In C++ the class method, when chained together, is syntactically nicer for
+// evaluating polynomials
+// On NEON, some compilers will optimize separate mul and add intrinsics into
+// a single fma anyway, so it is nice to be explicit about results varying
+// slightly across platforms
+#ifdef SIMD_GRANODI_FORCE_GENERIC
+static inline sg_ps sg_mul_add_ps(const sg_ps a, const sg_ps b, const sg_ps c) {
+    sg_ps result;
+    result.f0 = a.f0 * b.f0 + c.f0; result.f1 = a.f1 * b.f1 + c.f1;
+    result.f2 = a.f2 * b.f2 + c.f2; result.f3 = a.f3 * b.f3 + c.f3;
+    return result;
+}
+#elif defined SIMD_GRANODI_SSE2
+#define sg_mul_add_ps(a, b, c) _mm_add_ps(_mm_mul_ps(a, b), c)
+#elif defined SIMD_GRANODI_NEON
+#define sg_mul_add_ps(a, b, c) vfmaq_f32(c, a, b)
+#endif
+
+#ifdef SIMD_GRANODI_FORCE_GENERIC
+static inline sg_pd sg_mul_add_pd(const sg_pd a, const sg_pd b, const sg_pd c) {
+    sg_pd result;
+    result.d0 = a.d0 * b.d0 + c.d0; result.d1 = a.d1 * b.d1 + c.d1;
+    return result;
+}
+#elif defined SIMD_GRANODI_SSE2
+#define sg_mul_add_pd(a, b, c) _mm_add_pd(_mm_mul_pd(a, b), c)
+#elif defined SIMD_GRANODI_NEON
+#define sg_mul_add_pd(a, b, c) vfmaq_f64(c, a, b)
+#endif
+
 // Bitwise logic
 
 #ifdef SIMD_GRANODI_SSE2
@@ -5310,6 +5343,14 @@ public:
     Vec_ps(const sg_generic_ps& g_ps) : data_(sg_set_fromg_ps(g_ps)) {}
     #endif
 
+    // Useful for writing templated code that might be of the form:
+    //     var = vec_ps_arg * (0.312 * double_function_arg);
+    // into:
+    //     var = vec_ps_arg * (Vec_ps::scalar(0.312) *
+    //         Vec_ps::scalar(double_function_arg));
+    static float base(const double f64) { return static_cast<float>(f64); }
+    static float base(const float f32) { return f32; }
+
     static Vec_ps bitcast_from_u32(const uint32_t i) {
         return sg_set1_from_u32_ps(i);
     }
@@ -5362,6 +5403,10 @@ public:
     friend Vec_ps operator/(Vec_ps lhs, const Vec_ps& rhs) {
         lhs /= rhs;
         return lhs;
+    }
+
+    Vec_ps mul_add(const Vec_ps& mul, const Vec_ps& add) const {
+        return sg_mul_add_ps(data_, mul.data(), add.data());
     }
 
     Vec_ps& operator&=(const Vec_ps& rhs) {
@@ -5466,6 +5511,9 @@ public:
     Vec_pd(const sg_generic_pd& g_pd) : data_(sg_set_fromg_pd(g_pd)) {}
     #endif
 
+    static double base(const float f32) { return static_cast<double>(f32); }
+    static double base(const double f64) { return f64; }
+
     static Vec_pd bitcast_from_u64(const uint64_t l) {
         return sg_set1_from_u64_pd(l);
     }
@@ -5514,6 +5562,10 @@ public:
     friend Vec_pd operator/(Vec_pd lhs, const Vec_pd& rhs) {
         lhs /= rhs;
         return lhs;
+    }
+
+    Vec_pd mul_add(const Vec_pd& mul, const Vec_pd& add) const {
+        return sg_mul_add_pd(data_, mul.data(), add.data());
     }
 
     Vec_pd& operator&=(const Vec_pd& rhs) {
