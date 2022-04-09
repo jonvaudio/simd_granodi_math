@@ -154,7 +154,7 @@ static constexpr double coscof_[] = { 2.443315711809948e-5,
 
 inline Vec_ps logf_cm(const Vec_ps& x) {
     frexp_result_ps fr = frexp_ps(x);
-    Compare_ps x_lt_sqrth { x < SQRTH };
+    Compare_ps x_lt_sqrth { x < static_cast<float>(SQRTH) };
     Vec_ps e = fr.exponent.convert_to_ps() - x_lt_sqrth.choose_else_zero(1.0f);
     fr.mantissa = (fr.mantissa + x_lt_sqrth.choose_else_zero(fr.mantissa))
         - 1.0f;
