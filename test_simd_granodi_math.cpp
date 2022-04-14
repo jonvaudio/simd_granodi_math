@@ -28,10 +28,17 @@ inline Vec_pd log2_p3_pd(const Vec_pd& x) { return log2_p3(x); }
 inline Vec_ps log2_p3_ps(const Vec_ps& x) { return log2_p3(x); }
 inline Vec_pd exp2_p3_pd(const Vec_pd& x) { return exp2_p3(x); }
 inline Vec_ps exp2_p3_ps(const Vec_ps& x) { return exp2_p3(x); }
+
+inline Vec_f64x1 log2_p3_f64(const Vec_f64x1& x) { return log2_p3(x); }
+inline Vec_f32x1 log2_p3_f32(const Vec_f32x1& x) { return log2_p3(x); }
+inline Vec_f64x1 exp2_p3_f64(const Vec_f64x1& x) { return exp2_p3(x); }
+inline Vec_f32x1 exp2_p3_f32(const Vec_f32x1& x) { return exp2_p3(x); }
+
 inline Vec_pd logf_cm_pd(const Vec_pd& x) { return logf_cm(x); }
 inline Vec_ps logf_cm_ps(const Vec_ps& x) { return logf_cm(x); }
 inline Vec_pd expf_cm_pd(const Vec_pd& x) { return expf_cm(x); }
 inline Vec_ps expf_cm_ps(const Vec_ps& x) { return expf_cm(x); }
+
 inline Vec_pd sinf_cm_pd(const Vec_pd& x) { return sinf_cm(x); }
 inline Vec_ps sinf_cm_ps(const Vec_ps& x) { return sinf_cm(x); }
 inline Vec_pd cosf_cm_pd(const Vec_pd& x) { return cosf_cm(x); }

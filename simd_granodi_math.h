@@ -22,28 +22,28 @@ struct frexp_result_ps {
 and the exponent + 1 */
 inline frexp_result_pd frexp_pd(const Vec_pd& x) {
     frexp_result_pd result;
-    result.exponent = ((x.bitcast_to_pi64().shift_rl_imm<52>() & 0x7ff) - 1022)
-        .convert_to_pi32();
-    result.mantissa = ((x.bitcast_to_pi64() & 0x800fffffffffffff)
-        | 0x3fe0000000000000).bitcast_to_pd();
+    result.exponent = ((x.bitcast_to_s64().shift_rl_imm<52>() & 0x7ff) - 1022)
+        .convert_to_s32();
+    result.mantissa = ((x.bitcast_to_s64() & 0x800fffffffffffff)
+        | 0x3fe0000000000000).bitcast_to_f64();
     return result;
 }
 
 inline frexp_result_ps frexp_ps(const Vec_ps& x) {
     frexp_result_ps result;
-    result.exponent = (x.bitcast_to_pi32().shift_rl_imm<23>() & 0xff) - 126;
-    result.mantissa = ((x.bitcast_to_pi32() & 0x807fffff) | 0x3f000000)
-        .bitcast_to_ps();
+    result.exponent = (x.bitcast_to_s32().shift_rl_imm<23>() & 0xff) - 126;
+    result.mantissa = ((x.bitcast_to_s32() & 0x807fffff) | 0x3f000000)
+        .bitcast_to_f32();
     return result;
 }
 
 inline Vec_pd ldexp_pd(const Vec_pd& x, const Vec_pi32& e) {
-    return (x.bitcast_to_pi64() + e.convert_to_pi64().shift_l_imm<52>())
-        .bitcast_to_pd();
+    return (x.bitcast_to_s64() + e.convert_to_s64().shift_l_imm<52>())
+        .bitcast_to_f64();
 }
 
 inline Vec_ps ldexp_ps(const Vec_ps& x, const Vec_pi32& e) {
-    return (x.bitcast_to_pi32() + e.shift_l_imm<23>()).bitcast_to_ps();
+    return (x.bitcast_to_s32() + e.shift_l_imm<23>()).bitcast_to_f32();
 }
 
 //
@@ -59,70 +59,32 @@ static constexpr double log2_coeff_[] = { 1.6404256133344508e-1,
 static constexpr double exp2_coeff_[] = { 7.944154167983597e-2,
     2.2741127776021886e-1, 6.931471805599453e-1, 1.0 };
 
-inline Vec_pd log2_p3(const Vec_pd& x) {
-    Vec_pd exponent = ((x.bitcast_to_pi64().shift_rl_imm<52>() & 0x7ff) - 1023)
-        .convert_to_pi32().convert_to_pd(),
-    mantissa = ((x.bitcast_to_pi64() & 0x800fffffffffffff)
-        | 0x3ff0000000000000).bitcast_to_pd();
-
-    mantissa = mantissa.mul_add(log2_coeff_[0], log2_coeff_[1])
-        .mul_add(mantissa, log2_coeff_[2]).mul_add(mantissa, log2_coeff_[3]);
-
-    // Return zero for invalid input instead of -inf, for practical DSP reasons
-    return (x > 0.0).choose_else_zero(exponent + mantissa);
+template <typename VecType>
+inline VecType log2_p3(const VecType& x) {
+    VecType exponent = VecType::from(x.exponent_s32()),
+        mantissa = x.mantissa();
+    mantissa = mantissa.mul_add(VecType::elem_t(log2_coeff_[0]),
+            VecType::elem_t(log2_coeff_[1]))
+        .mul_add(mantissa, VecType::elem_t(log2_coeff_[2]))
+        .mul_add(mantissa, VecType::elem_t(log2_coeff_[3]));
+    return (x > 0).choose_else_zero(exponent + mantissa);
 }
 
-inline Vec_ps log2_p3(const Vec_ps& x) {
-    Vec_ps exponent = ((x.bitcast_to_pi32().shift_rl_imm<23>() & 0xff) - 127)
-        .convert_to_ps(),
-    mantissa = ((x.bitcast_to_pi32() & 0x807fffff) | 0x3f800000)
-        .bitcast_to_ps();
-
-    mantissa = mantissa.mul_add(Vec_ps{log2_coeff_[0]}, Vec_ps{log2_coeff_[1]})
-        .mul_add(mantissa, Vec_ps{log2_coeff_[2]})
-        .mul_add(mantissa, Vec_ps{log2_coeff_[3]});
-
-    return (x > 0.0f).choose_else_zero(exponent + mantissa);
+template <typename VecType>
+inline VecType exp2_p3(const VecType& x) {
+    const auto floor_s32 = x.floor_to_s32();
+    const VecType floor_f = VecType::from(floor_s32);
+    VecType frac = x - floor_f;
+    frac = frac.mul_add(VecType::elem_t(exp2_coeff_[0]),
+            VecType::elem_t(exp2_coeff_[1]))
+        .mul_add(frac, VecType::elem_t(exp2_coeff_[2]))
+        .mul_add(frac, VecType::elem_t(exp2_coeff_[3]));
+    return frac.ldexp(floor_s32);
 }
 
-inline Vec_pd exp2_p3(const Vec_pd& x) {
-    const Vec_pi32 floor_pi32 = x.floor_to_pi32();
-    const Vec_pd floor_pd = floor_pi32.convert_to_pd();
-    Vec_pd frac = x - floor_pd;
-    frac = frac.mul_add(exp2_coeff_[0], exp2_coeff_[1])
-        .mul_add(frac, exp2_coeff_[2]).mul_add(frac, exp2_coeff_[3]);
-    return ldexp_pd(frac, floor_pi32);
-}
-
-inline Vec_ps exp2_p3(const Vec_ps& x) {
-    const Vec_pi32 floor_pi32 = x.floor_to_pi32();
-    const Vec_ps floor_ps = floor_pi32.convert_to_ps();
-    Vec_ps frac = x - floor_ps;
-    frac = frac.mul_add(static_cast<float>(exp2_coeff_[0]),
-            static_cast<float>(exp2_coeff_[1]))
-        .mul_add(frac, static_cast<float>(exp2_coeff_[2]))
-        .mul_add(frac, static_cast<float>(exp2_coeff_[3]));
-    return ldexp_ps(frac, floor_pi32);
-}
-
-inline float log2_p3(const float x) { return log2_p3(Vec_ps{x}).f0(); }
-inline double log2_p3(const double x) { return log2_p3(Vec_pd{x}).d0(); }
-inline float exp2_p3(const float x) { return exp2_p3(Vec_ps{x}).f0(); }
-inline double exp2_p3(const double x) { return exp2_p3(Vec_pd{x}).d0(); }
-
-static constexpr double exp2_to_exp_scale_pre_ = 6.931471805599453e-1;
-
-inline float exp_p3(const float x) {
-    return exp2_p3(Vec_ps{x * static_cast<float>(exp2_to_exp_scale_pre_)}).f0();
-}
-inline double exp_p3(const double x) {
-    return exp2_p3(Vec_pd{x * exp2_to_exp_scale_pre_}).d0();
-}
-inline Vec_ps exp_p3(const Vec_ps& x) {
-    return exp2_p3(x * static_cast<float>(exp2_to_exp_scale_pre_));
-}
-inline Vec_pd exp_p3(const Vec_pd& x) {
-    return exp2_p3(x * exp2_to_exp_scale_pre_);
+template <typename VecType>
+inline VecType exp_p3(const VecType& x) {
+    return exp2_p3(VecType{x * VecType::elem_t(6.931471805599453e-1)});
 }
 
 //
@@ -155,7 +117,7 @@ static constexpr double coscof_[] = { 2.443315711809948e-5,
 inline Vec_ps logf_cm(const Vec_ps& x) {
     frexp_result_ps fr = frexp_ps(x);
     Compare_ps x_lt_sqrth { x < static_cast<float>(SQRTH) };
-    Vec_ps e = fr.exponent.convert_to_ps() - x_lt_sqrth.choose_else_zero(1.0f);
+    Vec_ps e = fr.exponent.convert_to_f32() - x_lt_sqrth.choose_else_zero(1.0f);
     fr.mantissa = (fr.mantissa + x_lt_sqrth.choose_else_zero(fr.mantissa))
         - 1.0f;
 
@@ -184,7 +146,7 @@ inline Vec_ps logf_cm(const Vec_ps& x) {
 inline Vec_pd logf_cm(const Vec_pd& x) {
     frexp_result_pd fr = frexp_pd(x);
     Compare_pd x_lt_sqrth { x < SQRTH };
-    Vec_pd e = fr.exponent.convert_to_pd() - x_lt_sqrth.choose_else_zero(1.0);
+    Vec_pd e = fr.exponent.convert_to_f64() - x_lt_sqrth.choose_else_zero(1.0);
     fr.mantissa = (fr.mantissa + x_lt_sqrth.choose_else_zero(fr.mantissa))
         - 1.0;
 
@@ -211,8 +173,8 @@ inline Vec_ps expf_cm(const Vec_ps& x) {
     Vec_ps xx = x;
     Vec_ps z = xx * static_cast<float>(log2e_);
 
-    Vec_pi32 n = z.convert_to_nearest_pi32();
-    z = n.convert_to_ps();
+    Vec_pi32 n = z.convert_to_nearest_s32();
+    z = n.convert_to_f32();
 
     xx -= z*static_cast<float>(log_q2_) + z*static_cast<float>(log_q1_);
     z = xx * xx;
@@ -234,8 +196,8 @@ inline Vec_pd expf_cm(const Vec_pd& x) {
     Vec_pd xx = x;
     Vec_pd z = xx * log2e_;
 
-    Vec_pi32 n = z.convert_to_nearest_pi32();
-    z = n.convert_to_pd();
+    Vec_pi32 n = z.convert_to_nearest_s32();
+    z = n.convert_to_f64();
 
     xx -= z*log_q2_ + z*log_q1_;
     z = xx * xx;
@@ -263,22 +225,22 @@ struct sincosf_result_pd { Vec_pd sin_result, cos_result; };
 inline sincosf_result_ps sincosf_cm(const Vec_ps& x) {
     Vec_ps sin_signbit = x & Vec_ps::bitcast_from_u32(0x80000000),
         xx = x.abs();
-    Vec_pi32 floor_pi32 = (xx * static_cast<float>(FOPI)).floor_to_pi32();
-    Vec_ps floor_ps = floor_pi32.convert_to_ps();
+    Vec_pi32 floor_pi32 = (xx * static_cast<float>(FOPI)).floor_to_s32();
+    Vec_ps floor_ps = floor_pi32.convert_to_f32();
     const Compare_pi32 floor_odd { (floor_pi32 & 1) == 1 };
     floor_pi32 += floor_odd.choose_else_zero(1);
-    floor_ps += floor_odd.bitcast_to_cmp_ps().choose_else_zero(1.0f);
+    floor_ps += floor_odd.convert_to_cmp_f32().choose_else_zero(1.0f);
 
     floor_pi32 &= 7;
 
     const Compare_pi32 floor_gt3 { floor_pi32 > 3 };
     floor_pi32 -= floor_gt3.choose_else_zero(4);
-    sin_signbit ^= floor_gt3.bitcast_to_cmp_ps()
+    sin_signbit ^= floor_gt3.convert_to_cmp_f32()
         .choose_else_zero(Vec_ps::bitcast_from_u32(0x80000000));
-    Vec_ps cos_signbit = floor_gt3.bitcast_to_cmp_ps()
+    Vec_ps cos_signbit = floor_gt3.convert_to_cmp_f32()
         .choose_else_zero(Vec_ps::bitcast_from_u32(0x80000000));
 
-    const Compare_ps floor_gt1 = (floor_pi32 > 1).bitcast_to_cmp_ps();
+    const Compare_ps floor_gt1 = (floor_pi32 > 1).convert_to_cmp_f32();
     cos_signbit ^= floor_gt1.choose_else_zero(
         Vec_ps::bitcast_from_u32(0x80000000));
 
@@ -299,7 +261,7 @@ inline sincosf_result_ps sincosf_cm(const Vec_ps& x) {
 
     // Choose results
     Compare_ps swap_results = ((floor_pi32 == 1) || (floor_pi32 == 2))
-        .bitcast_to_cmp_ps();
+        .convert_to_cmp_f32();
     sincosf_result_ps result;
     result.sin_result = swap_results.choose(cos_y, sin_y);
     result.cos_result = swap_results.choose(sin_y, cos_y);
@@ -314,23 +276,23 @@ inline sincosf_result_ps sincosf_cm(const Vec_ps& x) {
 inline sincosf_result_pd sincosf_cm(const Vec_pd& x) {
     Vec_pd sin_signbit = x & Vec_pd::bitcast_from_u64(0x8000000000000000),
         xx = x.abs();
-    Vec_pi32 floor_pi32 = (xx * FOPI).floor_to_pi32();
-    Vec_pd floor_pd = floor_pi32.convert_to_pd();
+    Vec_pi32 floor_pi32 = (xx * FOPI).floor_to_s32();
+    Vec_pd floor_pd = floor_pi32.convert_to_f64();
     Compare_pi32 floor_odd { (floor_pi32 & 1) == 1 };
     floor_pi32 += floor_odd.choose_else_zero(1);
-    floor_pd += floor_odd.convert_to_cmp_pd().choose_else_zero(1.0);
+    floor_pd += floor_odd.convert_to_cmp_f64().choose_else_zero(1.0);
 
     floor_pi32 &= 7;
 
     const Compare_pi32 floor_gt3 { floor_pi32 > 3 };
     floor_pi32 -= floor_gt3.choose_else_zero(4);
-    const Compare_pd floor_gt3_pd = floor_gt3.convert_to_cmp_pd();
+    const Compare_pd floor_gt3_pd = floor_gt3.convert_to_cmp_f64();
     sin_signbit ^= floor_gt3_pd.choose_else_zero(
         Vec_pd::bitcast_from_u64(0x8000000000000000));
     Vec_pd cos_signbit = floor_gt3_pd.choose_else_zero(
         Vec_pd::bitcast_from_u64(0x8000000000000000));
 
-    const Compare_pd floor_gt1 = (floor_pi32 > 1).convert_to_cmp_pd();
+    const Compare_pd floor_gt1 = (floor_pi32 > 1).convert_to_cmp_f64();
     cos_signbit ^= floor_gt1.choose_else_zero(
         Vec_pd::bitcast_from_u64(0x8000000000000000));
 
@@ -344,7 +306,7 @@ inline sincosf_result_pd sincosf_cm(const Vec_pd& x) {
     sin_y = sin_y*z*xx + xx;
 
     Compare_pd swap_results = ((floor_pi32 == 1) || (floor_pi32 == 2))
-        .convert_to_cmp_pd();
+        .convert_to_cmp_f64();
     sincosf_result_pd result;
     result.sin_result = swap_results.choose(cos_y, sin_y);
     result.cos_result = swap_results.choose(sin_y, cos_y);
