@@ -18,9 +18,9 @@ void test_func(const int start, const int stop, const double scale,
         const double xd = static_cast<double>(i) * scale;
         const float xf = static_cast<float>(xd);
         fprintf(output, "%.9f,", func_ps(Vec_ps{xf}).f0());
-        fprintf(output, "%.9f,", func_ss(Vec_f32x1{xf}).data());
+        fprintf(output, "%.9f,", func_ss(Vec_f32x1{xf}).f0());
         fprintf(output, "%.9f,", func_pd(Vec_pd{xd}).d0());
-        fprintf(output, "%.9f\n", func_sd(Vec_f64x1{xd}).data());
+        fprintf(output, "%.9f\n", func_sd(Vec_f64x1{xd}).d0());
     }
     fclose(output);
 }

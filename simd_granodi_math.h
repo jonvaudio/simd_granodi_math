@@ -25,7 +25,7 @@ inline VecType log2_p3(const VecType& x) {
             VecType::elem_t(log2_coeff_[1]))
         .mul_add(mantissa, VecType::elem_t(log2_coeff_[2]))
         .mul_add(mantissa, VecType::elem_t(log2_coeff_[3]));
-    return (x > 0).choose_else_zero(exponent + mantissa);
+    return (x > 0.0).choose(exponent + mantissa, VecType::minus_infinity());
 }
 
 template <typename VecType>
@@ -98,7 +98,7 @@ inline VecType logf_cm(const VecType& x) {
 
     z = mantissa + y + e*VecType::elem_t(log_q2_);
 
-    return (x > 0).choose_else_zero(z);
+    return (x > 0.0).choose(z, VecType::minus_infinity());
 }
 
 template <typename VecType>
