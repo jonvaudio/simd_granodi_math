@@ -94,7 +94,7 @@ inline VecType logf_cm(const VecType& x) {
         .mul_add(mantissa, VecType::elem_t(logf_coeff_[9]));
 
     y *= z;
-    y + e*VecType::elem_t(log_q1_) - 0.5*z;
+    y += e*VecType::elem_t(log_q1_) - 0.5*z;
 
     z = mantissa + y + e*VecType::elem_t(log_q2_);
 
@@ -157,7 +157,7 @@ inline sincosf_result<VecType> sincosf_cm(const VecType& x) {
     // Calculate cos
     VecType cos_y = z.mul_add(VecType::elem_t(coscof_[0]),
         VecType::elem_t(coscof_[1])).mul_add(z, VecType::elem_t(coscof_[2]));
-    cos_y = (cos_y*z*z - z*0.5) = 1.0;
+    cos_y = (cos_y*z*z - z*0.5) + 1.0;
 
     // Calculate sin
     VecType sin_y = z.mul_add(VecType::elem_t(sincof_[0]),
