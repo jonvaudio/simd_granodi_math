@@ -1,0 +1,2 @@
+g++ -o example simd_granodi_example.cpp -Wall -Wextra -std=c++11 -O3 -lm
+
