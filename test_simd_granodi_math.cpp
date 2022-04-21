@@ -17,10 +17,10 @@ void test_func(const int start, const int stop, const double scale,
     for (int i = start; i < stop; ++i) {
         const double xd = static_cast<double>(i) * scale;
         const float xf = static_cast<float>(xd);
-        fprintf(output, "%.9f,", func_ps(Vec_ps{xf}).f0());
-        fprintf(output, "%.9f,", float{func_ss(xf)});
-        fprintf(output, "%.9f,", func_pd(Vec_pd{xd}).d0());
-        fprintf(output, "%.9f\n", double{func_sd(xd)});
+        fprintf(output, "%.9f,", func_ps(xf).f0());
+        fprintf(output, "%.9f,", func_ss(xf).f0());
+        fprintf(output, "%.9f,", func_pd(xd).d0());
+        fprintf(output, "%.9f\n", func_sd(xd).d0());
     }
     fclose(output);
 }
