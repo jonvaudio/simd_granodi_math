@@ -2,7 +2,7 @@
 #include <cstdio>
 #include <functional>
 #include <string>
-#include "simd_granodi_math.h"
+#include "../simd_granodi_math.h"
 
 using namespace simd_granodi;
 
