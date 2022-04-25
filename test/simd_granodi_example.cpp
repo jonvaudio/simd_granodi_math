@@ -1,5 +1,5 @@
 #include <iostream>
-#include "simd_granodi.h"
+#include "../../simd_granodi/simd_granodi.h"
 
 using namespace simd_granodi;
 
@@ -40,7 +40,7 @@ int main() {
     auto log2_2d = square_vec(Vec_pd{7, 3});
 
     std::cout << "6 squared is " << square_f << std::endl <<
-    "approx log2(10) is " << double{log2_d} << std::endl <<
+    "approx log2(10) is " << log2_d.data() << std::endl <<
 
     "approx log2() of {4, 3, 9, 2} is {" << square_4f.f3() << ", " <<
     square_4f.f2() << ", " << square_4f.f1() << ", " <<
