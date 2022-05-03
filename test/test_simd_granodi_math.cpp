@@ -14,13 +14,25 @@ void test_func(const int start, const int stop, const double scale,
     const std::function<Vec_f64x1(const Vec_f64x1&)> func_sd)
 {
     FILE *output = fopen((filename + ".csv").data(), "w");
-    for (int i = start; i < stop; ++i) {
+    for (int32_t i = start; i < stop; ++i) {
         const double xd = static_cast<double>(i) * scale;
         const float xf = static_cast<float>(xd);
         fprintf(output, "%.9f,", func_ps(xf).f0());
         fprintf(output, "%.9f,", func_ss(xf).f0());
         fprintf(output, "%.9f,", func_pd(xd).d0());
         fprintf(output, "%.9f\n", func_sd(xd).d0());
+    }
+    fclose(output);
+}
+
+void test_func(const int start, const int stop, const double scale,
+    const std::string filename,
+    const std::function<double(const double)> func_d)
+{
+    FILE *output = fopen((filename + ".csv").data(), "w");
+    for (int32_t i = start; i < stop; ++i) {
+        const double xd = static_cast<double>(i) * scale;
+        fprintf(output, "%.15f\n", func_d(xd));
     }
     fclose(output);
 }
@@ -56,6 +68,8 @@ int main() {
 
     test_func(-800, 800, 0.01, file_prefix + "cosf_cm_test",
         cosf_cm<Vec_ps>, cosf_cm<Vec_ss>, cosf_cm<Vec_pd>, cosf_cm<Vec_sd>);
+
+    test_func(0, 20000, 0.01, file_prefix + "logd_cm_test", log_cm);
 
     return 0;
 }
