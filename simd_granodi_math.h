@@ -8,23 +8,17 @@ namespace simd_granodi {
 //
 // CUBIC APPROXIMATIONS
 
-// Polynomial coefficients
-// Calculate log2(x) for x in [1, 2]
-static constexpr double log2_coeff_[] = { 1.6404256133344508e-1,
-    -1.0988652862227437, 3.1482979293341158, -2.2134752044448169 };
-
-// Calculate exp2(x) for x in [0, 1]
-static constexpr double exp2_coeff_[] = { 7.944154167983597e-2,
-    2.2741127776021886e-1, 6.931471805599453e-1, 1.0 };
-
 template <typename VecType>
 inline VecType log2_p3(const VecType& x) {
     VecType exponent = VecType::from(x.exponent_s32()),
         mantissa = x.mantissa();
     using elem = typename VecType::elem_t;
-    mantissa = mantissa.mul_add(elem{log2_coeff_[0]}, elem{log2_coeff_[1]})
-        .mul_add(mantissa, elem{log2_coeff_[2]})
-        .mul_add(mantissa, elem{log2_coeff_[3]});
+    // Calculate log2(x) for x in [1, 2) using a cubic approximation.
+    // Gradient matches gradient of log2() at either end
+    mantissa = mantissa.mul_add(elem{1.6404256133344508e-1},
+            elem{-1.0988652862227437})
+        .mul_add(mantissa, elem{3.1482979293341158})
+        .mul_add(mantissa, elem{-2.2134752044448169});
     return (x > 0.0).choose(exponent + mantissa, VecType::minus_infinity());
 }
 
@@ -34,9 +28,11 @@ inline VecType exp2_p3(const VecType& x) {
     const VecType floor_f = VecType::from(floor_s32);
     VecType frac = x - floor_f;
     using elem = typename VecType::elem_t;
-    frac = frac.mul_add(elem{exp2_coeff_[0]}, elem{exp2_coeff_[1]})
-        .mul_add(frac, elem{exp2_coeff_[2]})
-        .mul_add(frac, elem{exp2_coeff_[3]});
+    // Calculate exp2(x) for x in [0, 1]
+    frac = frac.mul_add(elem{7.944154167983597e-2},
+            elem{2.2741127776021886e-1})
+        .mul_add(frac, elem{6.931471805599453e-1})
+        .mul_add(frac, elem{1.0});
     return frac.ldexp(floor_s32);
 }
 
@@ -52,26 +48,10 @@ inline VecType exp_p3(const VecType& x) {
 
 static constexpr double SQRTH = 7.07106781186547524401e-1;
 
-// log constants
-static constexpr double logf_coeff_[] = { 7.0376836292e-2, -1.1514610310e-1,
-    1.1676998740e-1, -1.2420140846e-1, 1.4249322787e-1, -1.6668057665e-1,
-    2.0000714765e-1, -2.4999993993e-1, 3.3333331174e-1, 0.0 };
-static constexpr double log_q1_ = -2.12194440e-4;
-static constexpr double log_q2_ = 6.93359375e-1;
-
-// exp constants
-static constexpr double log2e_ = 1.44269504088896341; // log2(e)
-static constexpr double expf_coeff_[] = { 1.9875691500e-4, 1.3981999507e-3,
-    8.3334519073e-3, 4.1665795894e-2, 1.6666665459e-1, 5.0000001201e-1 };
-
-// sincos constants
-static constexpr double FOPI = 1.27323954473516; // 4/pi
-static constexpr double dp1_ = 0.78515625, dp2_ = 2.4187564849853515625e-4,
-    dp3_ = 3.77489497744594108e-8;
-static constexpr double sincof_[] = { -1.9515295891e-4, 8.3321608736e-3,
-    -1.6666654611e-1 };
-static constexpr double coscof_[] = { 2.443315711809948e-5,
-    -1.388731625493765e-3, 4.166664568298827e-2 };
+// logf and expf constants
+static constexpr double log_q1_ = -2.12194440e-4,
+    log_q2_ = 6.93359375e-1,
+    log2e_ = 1.44269504088896341; // log2(e)
 
 template <typename VecType>
 inline VecType logf_cm(const VecType& x) {
@@ -84,15 +64,14 @@ inline VecType logf_cm(const VecType& x) {
 
     VecType z = mantissa * mantissa;
 
-    VecType y = mantissa.mul_add(elem{logf_coeff_[0]}, elem{logf_coeff_[1]})
-        .mul_add(mantissa, elem{logf_coeff_[2]})
-        .mul_add(mantissa, elem{logf_coeff_[3]})
-        .mul_add(mantissa, elem{logf_coeff_[4]})
-        .mul_add(mantissa, elem{logf_coeff_[5]})
-        .mul_add(mantissa, elem{logf_coeff_[6]})
-        .mul_add(mantissa, elem{logf_coeff_[7]})
-        .mul_add(mantissa, elem{logf_coeff_[8]})
-        .mul_add(mantissa, elem{logf_coeff_[9]});
+    VecType y = mantissa.mul_add(elem{7.0376836292e-2}, elem{-1.1514610310e-1})
+        .mul_add(mantissa, elem{1.1676998740e-1})
+        .mul_add(mantissa, elem{-1.2420140846e-1})
+        .mul_add(mantissa, elem{1.4249322787e-1})
+        .mul_add(mantissa, elem{-1.6668057665e-1})
+        .mul_add(mantissa, elem{2.0000714765e-1})
+        .mul_add(mantissa, elem{-2.4999993993e-1})
+        .mul_add(mantissa, elem{3.3333331174e-1}) * mantissa;
 
     y *= z;
     y += e*elem{log_q1_} - 0.5*z;
@@ -115,15 +94,18 @@ inline VecType expf_cm(const VecType& x) {
     z = xx * xx;
     VecType tmp_z = z;
 
-    z = xx.mul_add(elem{expf_coeff_[0]}, elem{expf_coeff_[1]})
-        .mul_add(xx, elem{expf_coeff_[2]})
-        .mul_add(xx, elem{expf_coeff_[3]})
-        .mul_add(xx, elem{expf_coeff_[4]})
-        .mul_add(xx, elem{expf_coeff_[5]});
+    z = xx.mul_add(elem{1.9875691500e-4}, elem{1.3981999507e-3})
+        .mul_add(xx, elem{8.3334519073e-3})
+        .mul_add(xx, elem{4.1665795894e-2})
+        .mul_add(xx, elem{1.6666665459e-1})
+        .mul_add(xx, elem{5.0000001201e-1});
     z *= tmp_z;
     z += xx + 1.0;
     return z.ldexp(n);
 }
+
+// sincos constants
+static constexpr double four_over_pi_ = 1.27323954473516;
 
 template <typename VecType>
 struct sincosf_result { VecType sin_result, cos_result; };
@@ -135,7 +117,7 @@ inline sincosf_result<VecType> sincosf_cm(const VecType& x) {
         xx = x.abs();
     using elem = typename VecType::elem_t;
     using compare = typename VecType::compare_t;
-    auto floor_s32 = (xx * elem{FOPI}).floor_to_s32();
+    auto floor_s32 = (xx * elem{four_over_pi_}).floor_to_s32();
     VecType floor_f = VecType::from(floor_s32);
     const auto floor_odd = (floor_s32 & 1) == 1;
     floor_s32 += floor_odd.choose_else_zero(1);
@@ -152,19 +134,21 @@ inline sincosf_result<VecType> sincosf_cm(const VecType& x) {
     const auto floor_gt1 = compare::from(floor_s32 > 1);
     cos_signbit ^= floor_gt1.choose_else_zero(-0.0);
 
-    xx -= floor_f*elem{dp1_}
-        + floor_f*elem{dp2_}
-        + floor_f*elem{dp3_};
+    xx -= floor_f.mul_add(elem{7.8515625e-1},
+        floor_f.mul_add(elem{2.4187564849853515625e-4},
+        floor_f * elem{3.77489497744594108e-8}));
     VecType z = xx * xx;
 
     // Calculate cos
-    VecType cos_y = z.mul_add(elem{coscof_[0]}, elem{coscof_[1]})
-        .mul_add(z, elem{coscof_[2]});
+    VecType cos_y = z.mul_add(elem{2.443315711809948e-5},
+            elem{-1.388731625493765e-3})
+        .mul_add(z, elem{4.166664568298827e-2});
     cos_y = (cos_y*z*z - z*0.5) + 1.0;
 
     // Calculate sin
-    VecType sin_y = z.mul_add(elem{sincof_[0]}, elem{sincof_[1]})
-        .mul_add(z, elem{sincof_[2]});
+    VecType sin_y = z.mul_add(elem{-1.9515295891e-4},
+            elem{8.3321608736e-3})
+        .mul_add(z, elem{-1.6666654611e-1});
     sin_y = sin_y*z*xx + xx;
 
     // Choose results
@@ -186,5 +170,26 @@ inline VecType sinf_cm(const VecType& x) { return sincosf_cm(x).sin_result; }
 
 template <typename VecType>
 inline VecType cosf_cm(const VecType& x) { return sincosf_cm(x).cos_result; }
+
+//
+//
+// CEPHES 64-BIT IMPLEMENTATIONS
+
+static constexpr double P[] = {
+ 1.01875663804580931796e-4,
+ 4.97494994976747001425e-1,
+ 4.70579119878881725854e0,
+ 1.44989225341610930846e1,
+ 1.79368678507819816313e1,
+ 7.70838733755885391666e0,
+};
+static constexpr double Q[] = {
+/* 1.00000000000000000000, */
+ 1.12873587189167450590e1,
+ 4.52279145837532221105e1,
+ 8.29875266912776603211e1,
+ 7.11544750618563894466e1,
+ 2.31251620126765340583e1,
+};
 
 } // namespace simd_granodi
