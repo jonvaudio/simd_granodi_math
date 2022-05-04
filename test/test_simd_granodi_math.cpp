@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <functional>
 #include <string>
+#include "../../jon_dsp/jon_dsp.h"
 #include "../simd_granodi_math.h"
 
 using namespace simd_granodi;
@@ -25,15 +26,24 @@ void test_func(const int start, const int stop, const double scale,
     fclose(output);
 }
 
-void test_func(const int start, const int stop, const double scale,
+void test_func(const double start, const double stop, const double step,
     const std::string filename,
-    const std::function<double(const double)> func_d)
+    const std::function<Vec_sd(const Vec_sd&)> reference_func_d,
+    const std::function<Vec_sd(const Vec_sd&)> func_d)
 {
+    //jon_dsp::ScopedDenormalDisable sdd;
     FILE *output = fopen((filename + ".csv").data(), "w");
-    for (int32_t i = start; i < stop; ++i) {
-        const double xd = static_cast<double>(i) * scale;
-        fprintf(output, "%.15f\n", func_d(xd));
+    double diff_max = 0.0, std_max = 0.0, cm_max = 0.0, xd_max = 0.0;
+    for (double xd = start; xd <= stop; xd += step) {
+        const double std = reference_func_d(xd).data();
+        const double cm = func_d(xd).data();
+        const double diff = std::abs(std-cm);
+        if (diff > diff_max) {
+            std_max = std; cm_max = cm; diff_max = diff; xd_max = xd;
+        }
+        fprintf(output, "%.15f,%.15f\n", std, cm);
     }
+    printf("input: %.15f, std: %.15f, cm: %.15f\n", xd_max, std_max, cm_max);
     fclose(output);
 }
 
@@ -69,7 +79,8 @@ int main() {
     test_func(-800, 800, 0.01, file_prefix + "cosf_cm_test",
         cosf_cm<Vec_ps>, cosf_cm<Vec_ss>, cosf_cm<Vec_pd>, cosf_cm<Vec_sd>);
 
-    test_func(0, 20000, 0.01, file_prefix + "logd_cm_test", log_cm);
+    test_func(1, 2, 0.001, file_prefix + "logd_cm_test",
+        std_log, log_cm);
 
     return 0;
 }

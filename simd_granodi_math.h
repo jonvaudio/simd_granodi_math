@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cassert>
+
 #include "../simd_granodi/simd_granodi.h"
 
 // WARNING: These functions use a faster frexp() implementation that has not
@@ -181,62 +183,12 @@ inline VecType cosf_cm(const VecType& x) { return sincosf_cm(x).cos_result; }
 //
 // CEPHES 64-BIT IMPLEMENTATIONS
 
-// These coefficients are stored in reverse order
-// p1evl() assumes that the final coefficient (first in the array) is 1 and
-// doesn't actually read it from the array
-
-/*static constexpr double P[] = {
- 1.01875663804580931796e-4,
- 4.97494994976747001425e-1,
- 4.70579119878881725854e0,
- 1.44989225341610930846e1,
- 1.79368678507819816313e1,
- 7.70838733755885391666e0,
-};
-static constexpr double Q[] = {
- 1.0,
- 1.12873587189167450590e1,
- 4.52279145837532221105e1,
- 8.29875266912776603211e1,
- 7.11544750618563894466e1,
- 2.31251620126765340583e1,
-};
-static constexpr double R[] = {
- 0.0
--7.89580278884799154124e-1,
- 1.63866645699558079767e1,
--6.41409952958715622951e1,
-};
-static constexpr double S[] = {
- 1.0,
--3.56722798256324312549e1,
- 3.12093766372244180303e2,
--7.69691943550460008604e2,
-};*/
-
-/*template <typename VecType>
-inline VecType log_cm(const VecType& a) {
-    static_assert(sizeof(typename VecType::elem_t) == 8,
-        "64-bit float type required");
-    VecType x = a.mantissa_frexp();
-    auto e = a.exponent_frexp_s32();
-    auto e_large = (e > 2) || (e < -2);
-    // This code is for the e_large case
-    auto x_ltsqrth = x < SQRTH;
-    auto x_ltsqrth_s32 = x_ltsqrth.convert_to_cmp_s32();
-    e -= x_ltsqrth_s32.choose_else_zero(1);
-    VecType z = x - x_ltsqrth.choose(0.5, 1.0);
-    VecType y = 0.5*x_ltsqrth.choose(z, x) + 0.5;
-    x = z / y;
-
-    z = x*x;
-}*/
-
-inline double log_cm(const double a) {
-    if (a <= 0.0) return sg_minus_infinity_f64x1;
-    double x = Vec_sd{a}.mantissa_frexp().data();
-    int32_t e = Vec_sd{a}.exponent_frexp().data();
+inline Vec_sd log_cm(const Vec_sd& a) {
+    if (a.data() <= 0.0) return sg_minus_infinity_f64x1;
+    double x = a.mantissa_frexp().data();
+    int32_t e = a.exponent_frexp().data();
     if ((e < -2) || (e > 2)) {
+        assert(false);
         double y, z;
         if (x < SQRTH) {
             e -= 1;
@@ -249,7 +201,6 @@ inline double log_cm(const double a) {
         x = z / y;
         z = x * x;
 
-        // Evaluate the top and bottom polynomials of the ratio simultaneously
         Vec_pd z_ratio {z};
         z_ratio = z_ratio.mul_add(Vec_pd{0.0, 1.0},
                 Vec_pd{-7.89580278884799154124e-1, -3.56722798256324312549e1})
@@ -266,7 +217,6 @@ inline double log_cm(const double a) {
         z += e_double * 6.93359375e-1;
         return z;
     } else {
-        // THIS SECTION CORRECT
         if (x < SQRTH) {
             e -= 1;
             x = 2.0*x - 1.0;
@@ -288,7 +238,6 @@ inline double log_cm(const double a) {
                 2.31251620126765340583e1});
 
         y = x * ((z * z_ratio.d1()) / z_ratio.d0());
-
         const double e_double = static_cast<double>(e);
         if (e) y -= e_double * 2.121944400546905827679e-4;
         y -= 0.5 * z;
@@ -297,6 +246,8 @@ inline double log_cm(const double a) {
         return z;
     }
 }
+
+inline Vec_sd std_log(const Vec_sd& x) { return std::log(x.data()); }
 
 /*inline Vec_sd log_cm(const Vec_sd& a) {
     return Vec_sd{log_cm(a.data())};
