@@ -118,9 +118,10 @@ static constexpr double four_over_pi_ = 1.27323954473516;
 template <typename VecType>
 struct sincosf_result { VecType sin_result, cos_result; };
 
-// Breaks for x > 8192
+// Breaks for x >= 8192
 template <typename VecType>
 inline sincosf_result<VecType> sincosf_cm(const VecType& x) {
+    assert((x < 8192.0f).debug_valid_eq(true));
     VecType sin_signbit = x & -0.0,
         xx = x.abs();
     using elem = typename VecType::elem_t;
@@ -182,13 +183,14 @@ inline VecType cosf_cm(const VecType& x) { return sincosf_cm(x).cos_result; }
 //
 //
 // CEPHES 64-BIT IMPLEMENTATIONS
+// These are scalar, but gain some speed by evaluating the top and bottom
+// polynomial in the ratio at the same time.
 
 inline Vec_sd log_cm(const Vec_sd& a) {
     if (a.data() <= 0.0) return sg_minus_infinity_f64x1;
     double x = a.mantissa_frexp().data();
     int32_t e = a.exponent_frexp().data();
     if ((e < -2) || (e > 2)) {
-        assert(false);
         double y, z;
         if (x < SQRTH) {
             e -= 1;
@@ -201,6 +203,7 @@ inline Vec_sd log_cm(const Vec_sd& a) {
         x = z / y;
         z = x * x;
 
+        // {R, S}
         Vec_pd z_ratio {z};
         z_ratio = z_ratio.mul_add(Vec_pd{0.0, 1.0},
                 Vec_pd{-7.89580278884799154124e-1, -3.56722798256324312549e1})
@@ -225,19 +228,21 @@ inline Vec_sd log_cm(const Vec_sd& a) {
         }
         double y, z;
         z = x * x;
-        Vec_pd z_ratio{z};
-        z_ratio = z_ratio.mul_add(Vec_pd{1.01875663804580931796e-4, 1.0},
+
+        // {P, Q}
+        Vec_pd x_ratio{x};
+        x_ratio = x_ratio.mul_add(Vec_pd{1.01875663804580931796e-4, 1.0},
                 Vec_pd{4.97494994976747001425e-1, 1.12873587189167450590e1})
-            .mul_add(z_ratio, Vec_pd{4.70579119878881725854,
+            .mul_add(x_ratio, Vec_pd{4.70579119878881725854,
                 4.52279145837532221105e1})
-            .mul_add(z_ratio, Vec_pd{1.44989225341610930846e1,
+            .mul_add(x_ratio, Vec_pd{1.44989225341610930846e1,
                 8.29875266912776603211e1})
-            .mul_add(z_ratio, Vec_pd{1.79368678507819816313e1,
+            .mul_add(x_ratio, Vec_pd{1.79368678507819816313e1,
                 7.11544750618563894466e1})
-            .mul_add(z_ratio, Vec_pd{7.70838733755885391666e0,
+            .mul_add(x_ratio, Vec_pd{7.70838733755885391666e0,
                 2.31251620126765340583e1});
 
-        y = x * ((z * z_ratio.d1()) / z_ratio.d0());
+        y = x * ((z * x_ratio.d1()) / x_ratio.d0());
         const double e_double = static_cast<double>(e);
         if (e) y -= e_double * 2.121944400546905827679e-4;
         y -= 0.5 * z;
@@ -247,14 +252,9 @@ inline Vec_sd log_cm(const Vec_sd& a) {
     }
 }
 
-inline Vec_sd std_log(const Vec_sd& x) { return std::log(x.data()); }
-
-/*inline Vec_sd log_cm(const Vec_sd& a) {
-    return Vec_sd{log_cm(a.data())};
+inline Vec_pd log_cm(const Vec_pd& x) {
+    return Vec_pd{log_cm(Vec_sd{x.d1()}).data(),
+        log_cm(Vec_sd{x.d0()}).data()};
 }
-
-inline Vec_pd log_cm(const Vec_pd& a) {
-    return Vec_pd{log_cm(a.d1()), log_cm(a.d0())};
-}*/
 
 } // namespace simd_granodi
