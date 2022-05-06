@@ -62,53 +62,54 @@ static constexpr double log_q1_ = -2.12194440e-4,
     log2e_ = 1.44269504088896341; // log2(e)
 
 template <typename VecType>
-inline VecType logf_cm(const VecType& x) {
+inline VecType logf_cm(const VecType& a) {
     using elem = typename VecType::elem_t;
+    VecType x = a.mantissa_frexp();
+    VecType e = VecType::from(a.exponent_frexp_s32());
     auto x_lt_sqrth = x < elem{SQRTH};
-    VecType e = VecType::from(x.exponent_frexp_s32())
-        - x_lt_sqrth.choose_else_zero(1.0);
-    VecType mantissa = x.mantissa_frexp();
-    mantissa = (mantissa + x_lt_sqrth.choose_else_zero(mantissa)) - 1.0;
+    e -= x_lt_sqrth.choose_else_zero(1.0);
+    x += x_lt_sqrth.choose_else_zero(x);
+    x -= 1.0;
 
-    VecType z = mantissa * mantissa;
+    VecType z = x * x;
 
-    VecType y = mantissa.mul_add(elem{7.0376836292e-2}, elem{-1.1514610310e-1})
-        .mul_add(mantissa, elem{1.1676998740e-1})
-        .mul_add(mantissa, elem{-1.2420140846e-1})
-        .mul_add(mantissa, elem{1.4249322787e-1})
-        .mul_add(mantissa, elem{-1.6668057665e-1})
-        .mul_add(mantissa, elem{2.0000714765e-1})
-        .mul_add(mantissa, elem{-2.4999993993e-1})
-        .mul_add(mantissa, elem{3.3333331174e-1}) * mantissa;
+    VecType y = x.mul_add(elem{7.0376836292e-2}, elem{-1.1514610310e-1})
+        .mul_add(x, elem{1.1676998740e-1})
+        .mul_add(x, elem{-1.2420140846e-1})
+        .mul_add(x, elem{1.4249322787e-1})
+        .mul_add(x, elem{-1.6668057665e-1})
+        .mul_add(x, elem{2.0000714765e-1})
+        .mul_add(x, elem{-2.4999993993e-1})
+        .mul_add(x, elem{3.3333331174e-1}) * x * z;
 
-    y *= z;
-    y += e*elem{log_q1_} - 0.5*z;
+    y += e*elem{log_q1_};
+    y += -0.5 * z;
+    z = x + y;
+    z += e*elem{log_q2_};
 
-    z = mantissa + y + e*elem{log_q2_};
-
-    return (x > 0.0).choose(z, VecType::minus_infinity());
+    return (a > 0.0).choose(z, VecType::minus_infinity());
 }
 
 template <typename VecType>
-inline VecType expf_cm(const VecType& x) {
+inline VecType expf_cm(const VecType& a) {
     using elem = typename VecType::elem_t;
-    VecType xx = x;
-    VecType z = xx * elem{log2e_};
+    VecType x = a;
 
+    VecType z = x * elem{log2e_};
     auto n = z.convert_to_nearest_s32();
     z = VecType::from(n);
 
-    xx -= z*elem{log_q2_} + z*elem{log_q1_};
-    z = xx * xx;
+    x -= z*elem{log_q2_} + z*elem{log_q1_};
+    z = x * x;
     VecType tmp_z = z;
 
-    z = xx.mul_add(elem{1.9875691500e-4}, elem{1.3981999507e-3})
-        .mul_add(xx, elem{8.3334519073e-3})
-        .mul_add(xx, elem{4.1665795894e-2})
-        .mul_add(xx, elem{1.6666665459e-1})
-        .mul_add(xx, elem{5.0000001201e-1});
+    z = x.mul_add(elem{1.9875691500e-4}, elem{1.3981999507e-3})
+        .mul_add(x, elem{8.3334519073e-3})
+        .mul_add(x, elem{4.1665795894e-2})
+        .mul_add(x, elem{1.6666665459e-1})
+        .mul_add(x, elem{5.0000001201e-1});
     z *= tmp_z;
-    z += xx + 1.0;
+    z += x + 1.0;
     return z.ldexp(n);
 }
 
@@ -255,6 +256,27 @@ inline Vec_sd log_cm(const Vec_sd& a) {
 inline Vec_pd log_cm(const Vec_pd& x) {
     return Vec_pd{log_cm(Vec_sd{x.d1()}).data(),
         log_cm(Vec_sd{x.d0()}).data()};
+}
+
+template <typename VecType>
+inline VecType exp_cm(const VecType& a) {
+    VecType x = a;
+    auto n = (x * log2e_).convert_to_nearest_s32();
+    VecType px = VecType::from(n);
+
+    x -= px * 6.93145751953125E-1 + px * 1.42860682030941723212E-6;
+
+    VecType xx = x * x;
+    VecType P = x * xx.mul_add(1.26177193074810590878e-4,
+            3.02994407707441961300e-2)
+        .mul_add(xx, 9.99999999999999999910e-1);
+    VecType Q = xx.mul_add(3.00198505138664455042e-6,
+            2.52448340349684104192e-3)
+        .mul_add(xx, 2.27265548208155028766e-1)
+        .mul_add(xx, 2.00000000000000000009e0);
+    x = P / (Q - P);
+    x = 2.0*x + 1.0;
+    return x.ldexp(n);
 }
 
 } // namespace simd_granodi
