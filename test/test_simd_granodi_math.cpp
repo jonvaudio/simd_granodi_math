@@ -11,12 +11,21 @@ inline float std_log2f(const float x) { return std::log2(x); }
 inline float std_exp2f(const float x) { return std::exp2(x); }
 inline float std_logf(const float x) { return std::log(x); }
 inline float std_expf(const float x) { return std::exp(x); }
+
 inline float std_sinf(const float x) { return std::sin(x); }
 inline float std_cosf(const float x) { return std::cos(x); }
+inline Vec_ps sinf_cm_ps(const Vec_ps& x) { return sinf_cm(x); }
+inline Vec_ss sinf_cm_ss(const Vec_ss& x) { return sinf_cm(x); }
+inline Vec_ps cosf_cm_ps(const Vec_ps& x) { return cosf_cm(x); }
+inline Vec_ss cosf_cm_ss(const Vec_ss& x) { return cosf_cm(x); }
 
 inline double std_log(const double x) { return std::log(x); }
 inline Vec_pd log_cm_pd(const Vec_pd& x) { return log_cm(x); }
 inline Vec_sd log_cm_sd(const Vec_sd& x) { return log_cm(x); }
+
+inline double std_sin(const double x) { return std::sin(x); }
+inline Vec_pd sin_cm_pd(const Vec_pd& x) { return sin_cm(x); }
+inline Vec_sd sin_cm_sd(const Vec_sd& x) { return sin_cm(x); }
 
 inline double std_exp(const double x) { return std::exp(x); }
 
@@ -127,11 +136,11 @@ int main() {
 
     func_csv<Vec_ps, Vec_ss, float>(-8.0, 8.0, 0.001,
         file_prefix + "sinf_cm",
-        std_sinf, sinf_cm<Vec_ps>, sinf_cm<Vec_ss>);
+        std_sinf, sinf_cm_ps, sinf_cm_ss);
 
     func_csv<Vec_ps, Vec_ss, float>(-8.0, 8.0, 0.001,
         file_prefix + "cosf_cm",
-        std_cosf, cosf_cm<Vec_ps>, cosf_cm<Vec_ss>);
+        std_cosf, cosf_cm_ps, cosf_cm_ss);
 
     func_csv<Vec_pd, Vec_sd, double>(0.0, 20.0, 0.001,
         file_prefix + "log_cm",
@@ -140,6 +149,10 @@ int main() {
     func_csv<Vec_pd, Vec_sd, double>(-20.0, 20.0, 0.001,
         file_prefix + "exp_cm",
         std_exp, exp_cm<Vec_pd>, exp_cm<Vec_sd>);
+
+    func_csv<Vec_pd, Vec_sd, double>(-8.0, 8.0, 0.001,
+        file_prefix + "sin_cm",
+        std_sin, sin_cm_pd, sin_cm_sd);
 
     return 0;
 }

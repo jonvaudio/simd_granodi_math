@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <initializer_list>
 
 #include "../simd_granodi/simd_granodi.h"
 
@@ -12,35 +13,90 @@
 
 namespace simd_granodi {
 
+template <typename CoeffType, int32_t N>
+class Poly {
+    CoeffType coeff_[N] {};
+public:
+    Poly(const std::initializer_list<CoeffType>& coeff) {
+        static_assert(N > 0, "must have at least one coefficient");
+        assert(coeff.size() == N);
+        std::size_t i = 0;
+        for (const CoeffType& c : coeff) {
+            if (i < N) coeff_[i++] = c;
+        }
+    }
+
+    // To evaluate two polynomials at the same time, where ArgType is
+    // Vec_ps with all elements giving equal value, and the results stored in
+    // 0 and 1
+    Poly(const Poly<Vec_ss, N>& poly1, const Poly<Vec_ss, N>& poly0) {
+        for (int32_t i = 0; i < N; ++i) {
+            coeff_[i] = Vec_ps{0.0f, 0.0f, poly1[i].data(), poly0[i].data()};
+        }
+    }
+
+    Poly(const Poly<Vec_sd, N>& poly1, const Poly<Vec_sd, N>& poly0) {
+        for (int32_t i = 0; i < N; ++i) {
+            coeff_[i] = Vec_pd{poly1[i].data(), poly0[i].data()};
+        }
+    }
+
+    template <typename ArgType>
+    ArgType eval(const ArgType& x) const {
+        ArgType result;
+        if (N == 1) {
+            result = x * ArgType::from(coeff_[0]);
+        } else if (N > 1) {
+            result = x.mul_add(ArgType::from(coeff_[0]),
+                ArgType::from(coeff_[1]));
+            for (int32_t i = 2; i < N; ++i) {
+                result = result.mul_add(x, ArgType::from(coeff_[i]));
+            }
+        } else {
+            result = x;
+        }
+        return result;
+    }
+
+    const CoeffType& operator[](std::size_t i) const {
+        assert(0 <= i && i < N);
+        return coeff_[i];
+    }
+};
+
 //
 //
-// CUBIC APPROXIMATIONS
+// CUBIC APPROXIMATIONS: very fast, very smooth, but not accurate
+
+// Calculate log2(x) for x in [1, 2) using a cubic approximation.
+// Gradient matches gradient of log2() at either end
+static const Poly<Vec_sd, 4> log2_p3_poly_ {
+ 1.6404256133344508e-1,
+-1.0988652862227437,
+ 3.1482979293341158,
+-2.2134752044448169 };
 
 template <typename VecType>
 inline VecType log2_p3(const VecType& x) {
     VecType exponent = VecType::from(x.exponent_s32()),
         mantissa = x.mantissa();
-    using elem = typename VecType::elem_t;
-    // Calculate log2(x) for x in [1, 2) using a cubic approximation.
-    // Gradient matches gradient of log2() at either end
-    mantissa = mantissa.mul_add(elem{1.6404256133344508e-1},
-            elem{-1.0988652862227437})
-        .mul_add(mantissa, elem{3.1482979293341158})
-        .mul_add(mantissa, elem{-2.2134752044448169});
+    mantissa = log2_p3_poly_.eval(mantissa);
     return (x > 0.0).choose(exponent + mantissa, VecType::minus_infinity());
 }
+
+// Calculate exp2(x) for x in [0, 1]. Gradient matches exp2() at both ends
+static const Poly<Vec_sd, 4> exp2_p3_poly_ {
+7.944154167983597e-2,
+2.2741127776021886e-1,
+6.931471805599453e-1,
+1.0 };
 
 template <typename VecType>
 inline VecType exp2_p3(const VecType& x) {
     const auto floor_s32 = x.floor_to_s32();
     const VecType floor_f = VecType::from(floor_s32);
     VecType frac = x - floor_f;
-    using elem = typename VecType::elem_t;
-    // Calculate exp2(x) for x in [0, 1]
-    frac = frac.mul_add(elem{7.944154167983597e-2},
-            elem{2.2741127776021886e-1})
-        .mul_add(frac, elem{6.931471805599453e-1})
-        .mul_add(frac, elem{1.0});
+    frac = exp2_p3_poly_.eval(frac);
     return frac.ldexp(floor_s32);
 }
 
@@ -61,9 +117,22 @@ static constexpr double log_q1_ = -2.12194440e-4,
     log_q2_ = 6.93359375e-1,
     log2e_ = 1.44269504088896341; // log2(e)
 
+static const Poly<Vec_ss, 9> logf_poly_ {
+ 7.0376836292e-2f,
+-1.1514610310e-1f,
+ 1.1676998740e-1f,
+-1.2420140846e-1f,
+ 1.4249322787e-1f,
+-1.6668057665e-1f,
+ 2.0000714765e-1f,
+-2.4999993993e-1f,
+ 3.3333331174e-1f };
+
 template <typename VecType>
 inline VecType logf_cm(const VecType& a) {
     using elem = typename VecType::elem_t;
+    static_assert(sizeof(elem) == 4, "logf_cm() is for f32 types");
+
     VecType x = a.mantissa_frexp();
     VecType e = VecType::from(a.exponent_frexp_s32());
     auto x_lt_sqrth = x < elem{SQRTH};
@@ -73,14 +142,7 @@ inline VecType logf_cm(const VecType& a) {
 
     VecType z = x * x;
 
-    VecType y = x.mul_add(elem{7.0376836292e-2}, elem{-1.1514610310e-1})
-        .mul_add(x, elem{1.1676998740e-1})
-        .mul_add(x, elem{-1.2420140846e-1})
-        .mul_add(x, elem{1.4249322787e-1})
-        .mul_add(x, elem{-1.6668057665e-1})
-        .mul_add(x, elem{2.0000714765e-1})
-        .mul_add(x, elem{-2.4999993993e-1})
-        .mul_add(x, elem{3.3333331174e-1}) * x * z;
+    VecType y = logf_poly_.eval(x) * x * z;
 
     y += e*elem{log_q1_};
     y += -0.5 * z;
@@ -90,102 +152,131 @@ inline VecType logf_cm(const VecType& a) {
     return (a > 0.0).choose(z, VecType::minus_infinity());
 }
 
+static const Poly<Vec_ss, 6> expf_poly_ {
+1.9875691500e-4f,
+1.3981999507e-3f,
+8.3334519073e-3f,
+4.1665795894e-2f,
+1.6666665459e-1f,
+5.0000001201e-1f };
+
 template <typename VecType>
 inline VecType expf_cm(const VecType& a) {
     using elem = typename VecType::elem_t;
-    VecType x = a;
+    static_assert(sizeof(elem) == 4, "expf_cm() is for f32 types");
 
+    VecType x = a;
     VecType z = x * elem{log2e_};
     auto n = z.convert_to_nearest_s32();
     z = VecType::from(n);
 
     x -= z*elem{log_q2_} + z*elem{log_q1_};
     z = x * x;
-    VecType tmp_z = z;
-
-    z = x.mul_add(elem{1.9875691500e-4}, elem{1.3981999507e-3})
-        .mul_add(x, elem{8.3334519073e-3})
-        .mul_add(x, elem{4.1665795894e-2})
-        .mul_add(x, elem{1.6666665459e-1})
-        .mul_add(x, elem{5.0000001201e-1});
-    z *= tmp_z;
+    z *= expf_poly_.eval(x);
     z += x + 1.0;
     return z.ldexp(n);
 }
 
 // sincos constants
 static constexpr double four_over_pi_ = 1.27323954473516;
+static constexpr float DP1_ = 0.78515625f;
+static constexpr float DP2_ = 2.4187564849853515625e-4f;
+static constexpr float DP3_ = 3.77489497744594108e-8f;
+
+static const Poly<Vec_ss, 3> sinf_coeff_ {
+-1.9515295891e-4f,
+ 8.3321608736e-3f,
+-1.6666654611e-1f };
+static const Poly<Vec_ss, 3> cosf_coeff_ {
+ 2.443315711809948e-5f,
+-1.388731625493765e-3f,
+ 4.166664568298827e-2f };
+
+// {cos, sin}
+static const Poly<Vec_ps, 3> sincosf_coeff_ { cosf_coeff_, sinf_coeff_ };
 
 template <typename VecType>
-struct sincosf_result { VecType sin_result, cos_result; };
+struct sincos_result { VecType sin_result, cos_result; };
 
-// Breaks for x >= 8192
-template <typename VecType>
-inline sincosf_result<VecType> sincosf_cm(const VecType& x) {
-    assert((x < 8192.0f).debug_valid_eq(true));
-    VecType sin_signbit = x & -0.0,
-        xx = x.abs();
-    using elem = typename VecType::elem_t;
-    using compare = typename VecType::compare_t;
-    auto floor_s32 = (xx * elem{four_over_pi_}).floor_to_s32();
-    VecType floor_f = VecType::from(floor_s32);
-    const auto floor_odd = (floor_s32 & 1) == 1;
-    floor_s32 += floor_odd.choose_else_zero(1);
-    floor_f += compare::from(floor_odd).choose_else_zero(1.0);
+// sin and cos for f32 break when x >= 8192
+inline sincos_result<Vec_ss> sincosf_cm(const Vec_ss& xx) {
+    // {cos sign bit, sin sign bit}
+    Vec_ps signbits {0.0f, 0.0f, 0.0f, (xx & -0.0f).data()};
+    float x = xx.abs().data();
+    int32_t j = static_cast<int32_t>(x * static_cast<float>(four_over_pi_));
+    float y = static_cast<float>(j);
+    if (j & 1) {
+        ++j;
+        y += 1.0f;
+    }
+    j &= 7;
+    if (j > 3) {
+        signbits ^= Vec_ps{0.0f, 0.0f, -0.0f, -0.0f};
+        j -= 4;
+    }
+    if (j > 1) signbits ^= Vec_ps{0.0f, 0.0f, -0.0f, 0.0f};
+    x = ((x - y * DP1_) - y * DP2_) - y * DP3_;
+    const float z = x * x;
+    // From here, calculate both {cos, sin} results in parallel
+    Vec_ps result = sincosf_coeff_.eval(Vec_ps{0.0f, 0.0f, z, z}) * z;
+    result *= Vec_ps{0.0f, 0.0f, z, x};
+    result += Vec_ps{0.0f, 0.0f, 1.0f - 0.5f*z, x};
+    if ((j == 1) || (j == 2)) result = result.shuffle<3, 2, 0, 1>();
+    result ^= signbits;
+    sincos_result<Vec_ss> r;
+    r.sin_result = result.f0();
+    r.cos_result = result.f1();
+    return r;
+}
 
-    floor_s32 &= 7;
+inline Vec_ss sinf_cm(const Vec_ss& x) { return sincosf_cm(x).sin_result; }
+inline Vec_ss cosf_cm(const Vec_ss& x) { return sincosf_cm(x).cos_result; }
 
-    const auto floor_gt3 = floor_s32 > 3;
-    const auto floor_gt3_f = compare::from(floor_gt3);
-    floor_s32 -= floor_gt3.choose_else_zero(4);
-    sin_signbit ^= floor_gt3_f.choose_else_zero(-0.0);
-    VecType cos_signbit = floor_gt3_f.choose_else_zero(-0.0);
-
-    const auto floor_gt1 = compare::from(floor_s32 > 1);
-    cos_signbit ^= floor_gt1.choose_else_zero(-0.0);
-
-    xx -= floor_f.mul_add(elem{7.8515625e-1},
-        floor_f.mul_add(elem{2.4187564849853515625e-4},
-        floor_f * elem{3.77489497744594108e-8}));
-    VecType z = xx * xx;
-
-    // Calculate cos
-    VecType cos_y = z.mul_add(elem{2.443315711809948e-5},
-            elem{-1.388731625493765e-3})
-        .mul_add(z, elem{4.166664568298827e-2});
-    cos_y = (cos_y*z*z - z*0.5) + 1.0;
-
-    // Calculate sin
-    VecType sin_y = z.mul_add(elem{-1.9515295891e-4},
-            elem{8.3321608736e-3})
-        .mul_add(z, elem{-1.6666654611e-1});
-    sin_y = sin_y*z*xx + xx;
-
-    // Choose results
-    const auto swap_results = compare::from(
-        (floor_s32 == 1) || (floor_s32 == 2));
-    sincosf_result<VecType> result;
-    result.sin_result = swap_results.choose(cos_y, sin_y);
-    result.cos_result = swap_results.choose(sin_y, cos_y);
-
-    // Appy signs
-    result.sin_result ^= sin_signbit;
-    result.cos_result ^= cos_signbit;
-
+inline sincos_result<Vec_ps> sincosf_cm(const Vec_ps& xx) {
+    Vec_ps cos_signbit = 0.0f, sin_signbit = xx & -0.0f;
+    Vec_ps x = xx.abs();
+    Vec_pi32 j = (x * static_cast<float>(four_over_pi_)).truncate_to_s32();
+    Vec_ps y = j.convert_to_f32();
+    const Compare_pi32 j_odd {(j & 1) != 0};
+    j += j_odd.choose_else_zero(1);
+    y += j_odd.convert_to_cmp_f32().choose_else_zero(1.0f);
+    j &= 7;
+    const Compare_pi32 j_gt_3 { j > 3 };
+    j -= j_gt_3.choose_else_zero(4);
+    cos_signbit ^= j_gt_3.convert_to_cmp_f32().choose_else_zero(-0.0f);
+    sin_signbit ^= j_gt_3.convert_to_cmp_f32().choose_else_zero(-0.0f);
+    const Compare_ps j_gt_1 = (j > 1).convert_to_cmp_f32();
+    cos_signbit ^= j_gt_1.choose_else_zero(-0.0f);
+    x = ((x - y * DP1_) - y * DP2_) - y * DP3_;
+    const Vec_ps z = x * x;
+    // Brackets on following line needed for identical scalar / vec behaviour
+    const Vec_ps cos_result = cosf_coeff_.eval(z) * z * z + (1.0f - 0.5f*z),
+        sin_result = sinf_coeff_.eval(z) * z * x + x;
+    const Compare_ps swap = ((j == 1) || (j == 2)).convert_to_cmp_f32();
+    sincos_result<Vec_ps> result;
+    result.cos_result = swap.choose(sin_result, cos_result) ^ cos_signbit;
+    result.sin_result = swap.choose(cos_result, sin_result) ^ sin_signbit;
     return result;
 }
 
-template <typename VecType>
-inline VecType sinf_cm(const VecType& x) { return sincosf_cm(x).sin_result; }
-
-template <typename VecType>
-inline VecType cosf_cm(const VecType& x) { return sincosf_cm(x).cos_result; }
+inline Vec_ps sinf_cm(const Vec_ps& x) { return sincosf_cm(x).sin_result; }
+inline Vec_ps cosf_cm(const Vec_ps& x) { return sincosf_cm(x).cos_result; }
 
 //
 //
 // CEPHES 64-BIT IMPLEMENTATIONS
-// These are scalar, but gain some speed by evaluating the top and bottom
-// polynomial in the ratio at the same time.
+
+template <typename VecType>
+struct log_cm_setup_result_ {
+    VecType x, y, z, e;
+};
+
+template <typename VecType>
+inline VecType log_cm_setup_(const VecType& a) {
+    //
+}
+
+//static const Poly<Vec_sd,
 
 inline Vec_sd log_cm(const Vec_sd& a) {
     if (a.data() <= 0.0) return sg_minus_infinity_f64x1;
@@ -277,6 +368,66 @@ inline VecType exp_cm(const VecType& a) {
     x = P / (Q - P);
     x = 2.0*x + 1.0;
     return x.ldexp(n);
+}
+
+static constexpr double DP1 = 7.85398125648498535156e-1;
+static constexpr double DP2 = 3.77489470793079817668e-8;
+static constexpr double DP3 = 2.69515142907905952645e-15;
+
+inline Vec_sd sin_cm(const Vec_sd& a) {
+    double x = a.data();
+    int32_t sign = x < 0.0 ? -1 : 1;
+    x = std::abs(x);
+
+    double y = std::floor(x * four_over_pi_);
+
+    double z = std::floor(y * 0.0625);
+    z = y - 16.0*z;
+
+    int32_t j = static_cast<int32_t>(z);
+    if (j & 1) {
+        ++j;
+        y += 1.0;
+    }
+    j &= 7;
+    if (j > 3) {
+        sign = -sign;
+        j -= 4;
+    }
+
+    z = ((x - DP1*y) - DP2*y) - DP3*y;
+
+    double zz = z * z;
+
+    Vec_sd poly{zz};
+    if ((j == 1) || (j == 2)) {
+        poly = poly.mul_add(-1.13585365213876817300e-11,
+                2.08757008419747316778e-9)
+            .mul_add(poly, -2.75573141792967388112e-7)
+            .mul_add(poly, 2.48015872888517045348e-5)
+            .mul_add(poly, -1.38888888888730564116e-3)
+            .mul_add(poly, 4.16666666666665929218e-2);
+        y = 1.0 - 0.5*zz + zz * zz * poly.data();
+    } else {
+        poly = poly.mul_add(1.58962301576546568060e-10,
+                -2.50507477628578072866e-8)
+            .mul_add(poly, 2.75573136213857245213e-6)
+            .mul_add(poly, -1.98412698295895385996e-4)
+            .mul_add(poly, 8.33333333332211858878e-3)
+            .mul_add(poly, -1.66666666666666307295e-1);
+        y = z + z * (zz * poly.data());
+    }
+
+    y = sign < 0 ? -y : y;
+
+    return y;
+}
+
+inline Vec_pd sin_cm(const Vec_pd& a) {
+    return Vec_pd{
+        sin_cm(Vec_sd{a.d1()}).data(),
+        sin_cm(Vec_sd{a.d0()}).data()
+    };
 }
 
 } // namespace simd_granodi
