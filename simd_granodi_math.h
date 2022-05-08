@@ -58,6 +58,22 @@ public:
         return result;
     }
 
+    // evaluates ((insert + coeff[0])*x + coeff[1])*x ...
+    // use case: first coefficient is 1.0, or 0.0 (for parallel eval)
+    template <typename ArgType>
+    ArgType eval_insert(const ArgType& x, const ArgType& insert) const {
+        ArgType result;
+        if (N > 0) {
+            result = insert + ArgType::from(coeff_[0]);
+            for (int32_t i = 1; i < N; ++i) {
+                result = result.mul_add(x, ArgType::from(coeff_[i]));
+            }
+        } else {
+            result = x;
+        }
+        return result;
+    }
+
     const CoeffType& operator[](std::size_t i) const {
         assert(0 <= i && i < N);
         return coeff_[i];
@@ -276,7 +292,17 @@ inline VecType log_cm_setup_(const VecType& a) {
     //
 }
 
-//static const Poly<Vec_sd,
+static const Poly<Vec_sd, 4> log_coeff_R_ {
+-7.89580278884799154124e-1,
+ 1.63866645699558079767e1
+ -6.41409952958715622951e1 };
+static const Poly<Vec_sd, 4> log_coeff_S_ {
+// 1.0,
+-3.56722798256324312549e1,
+ 3.12093766372244180303e2,
+-7.69691943550460008604e2 };
+
+static const Poly<Vec_pd, 4> log_coeff_R_S_ { log_coeff_R_, log_coeff_S_ };
 
 inline Vec_sd log_cm(const Vec_sd& a) {
     if (a.data() <= 0.0) return sg_minus_infinity_f64x1;
