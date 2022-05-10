@@ -23,17 +23,17 @@ inline double std_log(const double x) { return std::log(x); }
 inline Vec_pd log_cm_pd(const Vec_pd& x) { return log_cm(x); }
 inline Vec_sd log_cm_sd(const Vec_sd& x) { return log_cm(x); }
 
+inline double std_exp(const double x) { return std::exp(x); }
+inline Vec_pd exp_cm_pd(const Vec_pd& x) { return exp_cm(x); }
+inline Vec_sd exp_cm_sd(const Vec_sd& x) { return exp_cm(x); }
+
 inline double std_sin(const double x) { return std::sin(x); }
 inline Vec_pd sin_cm_pd(const Vec_pd& x) { return sin_cm(x); }
 inline Vec_sd sin_cm_sd(const Vec_sd& x) { return sin_cm(x); }
 
-inline double std_exp(const double x) { return std::exp(x); }
-
-/*inline Vec_sd relative_error(const Vec_sd& reference, const Vec_sd& test) {
-    const Vec_s64x1 reference_expo = reference.exponent();
-    const Vec_sd abs_diff = (reference - test).abs();
-    return abs_diff.ldexp(-reference_expo);
-}*/
+inline double std_cos(const double x) { return std::cos(x); }
+inline Vec_pd cos_cm_pd(const Vec_pd& x) { return cos_cm(x); }
+inline Vec_sd cos_cm_sd(const Vec_sd& x) { return cos_cm(x); }
 
 inline Vec_sd relative_error(const Vec_sd& reference, const Vec_sd& test) {
     //printf("ref: %.15f, test: %.15f\n", reference.data(), test.data());
@@ -61,8 +61,10 @@ void func_csv(const double start, const double stop, const double interval,
     static_assert(ScalarType::elem_count == 1, "Scalar type must be scalar");
     static_assert(sizeof(FloatType) == ScalarType::elem_size,
         "Wrong float type");
+    #ifdef NDEBUG
     FILE *output = fopen((filename + ".csv").data(), "w");
     fprintf(output, "reference,result,relative error\n,,\n");
+    #endif
     double diff_max = 0.0, diff_total = 0.0, result_count = 0.0;
     for (double i = start; i <= stop; i += interval, result_count += 1.0) {
         const double xd = static_cast<double>(i);
@@ -77,10 +79,12 @@ void func_csv(const double start, const double stop, const double interval,
                 filename.data(), scalar_result, vec_result.template get<0>());
         }
 
+        #ifdef NDEBUG
         if (VecType::elem_size == 4) {
             fprintf(output, "%.9f,%.9f,", ref_result, scalar_result);
         }
         else fprintf(output, "%.15f,%.15f,", ref_result, scalar_result);
+        #endif
         if (std::isfinite(ref_result) != std::isfinite(scalar_result)) {
             printf("Big problem\n");
         }
@@ -89,12 +93,18 @@ void func_csv(const double start, const double stop, const double interval,
                 .data();
             diff_total += re * re;
             if (std::abs(re) > std::abs(diff_max)) diff_max = re;
+            #ifdef NDEBUG
             if (VecType::elem_size == 4) fprintf(output, "%.9e", re);
             else fprintf(output, "%.15e", re);
+            #endif
         }
+        #ifdef NDEBUG
         fprintf(output, "\n");
+        #endif
     }
+    #ifdef NDEBUG
     fclose(output);
+    #endif
     // Check accuracy on optimized builds as results may be different due to
     // FMA etc
     #ifdef NDEBUG
@@ -148,11 +158,15 @@ int main() {
 
     func_csv<Vec_pd, Vec_sd, double>(-20.0, 20.0, 0.001,
         file_prefix + "exp_cm",
-        std_exp, exp_cm<Vec_pd>, exp_cm<Vec_sd>);
+        std_exp, exp_cm_pd, exp_cm_sd);
 
     func_csv<Vec_pd, Vec_sd, double>(-8.0, 8.0, 0.001,
         file_prefix + "sin_cm",
         std_sin, sin_cm_pd, sin_cm_sd);
+
+    func_csv<Vec_pd, Vec_sd, double>(-8.0, 8.0, 0.001,
+        file_prefix + "cos_cm",
+        std_cos, cos_cm_pd, cos_cm_sd);
 
     return 0;
 }
