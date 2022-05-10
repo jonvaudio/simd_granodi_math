@@ -1,5 +1,5 @@
-g++ -o test_opt test_simd_granodi_math.cpp -Wall -Wextra -std=c++11 -O3 -lm -D TEST_OPT
 g++ -o test_dbg test_simd_granodi_math.cpp -Wall -Wextra -std=c++11 -lm
+g++ -o test_opt test_simd_granodi_math.cpp -Wall -Wextra -std=c++11 -O3 -lm -DNDEBUG
 
 # asm
 #g++ -S -o test_opt.s test_simd_granodi_math.cpp -fverbose-asm -Wall -Wextra -std=c++11 -O3 -lm -D TEST_OPT
