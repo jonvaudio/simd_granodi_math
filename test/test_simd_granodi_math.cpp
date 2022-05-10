@@ -75,7 +75,7 @@ void func_csv(const double start, const double stop, const double interval,
         (void) vec_result; // NDEBUG builds warn vec_result not used
 
         if (!vec_result.debug_eq(scalar_result)) {
-            printf("%s scalar, vec discrepancy: %.15f, %.15f\n",
+            printf("%s scalar, vec discrepancy: %.20f, %.20f\n",
                 filename.data(), scalar_result, vec_result.template get<0>());
         }
 
@@ -107,11 +107,11 @@ void func_csv(const double start, const double stop, const double interval,
     #endif
     // Check accuracy on optimized builds as results may be different due to
     // FMA etc
-    #ifdef NDEBUG
+    //#ifdef NDEBUG
     const double diff_avg = std::sqrt(diff_total / result_count);
     printf("%s\trms error: %.1e\tmax error: %.1e\n", filename.data(),
         diff_avg, diff_max);
-    #endif
+    //#endif
 }
 
 int main() {

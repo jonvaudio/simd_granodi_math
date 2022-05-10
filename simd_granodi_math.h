@@ -77,7 +77,7 @@ public:
         return result;
     }
 
-    const CoeffType& operator[](std::size_t i) const {
+    const CoeffType& operator[](std::int32_t i) const {
         assert(0 <= i && i < N);
         return coeff_[i];
     }
@@ -343,7 +343,7 @@ static const Poly<Vec_pd, 4> log_poly_R_S {
 inline Vec_sd log_cm(const Vec_sd& a) {
     if (a.data() <= 0.0) return sg_minus_infinity_f64x1;
     double x = a.mantissa_frexp().data();
-    int32_t e = a.exponent_frexp().data();
+    int32_t e = a.exponent_frexp_s32().data();
     double y, z;
     if (x < sg_math_const::sqrt_half) {
         e -= 1;
