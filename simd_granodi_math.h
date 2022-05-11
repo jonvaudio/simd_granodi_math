@@ -90,6 +90,99 @@ public:
 
 namespace sg_math_const {
 
+template <typename VecType> struct FloatBits {};
+
+template <> struct FloatBits<Vec_ps> {
+    static constexpr int32_t exp_shift = 23, exp_mask = 0xff, exp_bias = 127,
+        mant_mask = 0x807fffff, exp1 = 0x3f800000, exph = 0x3f000000;
+};
+template <> struct FloatBits<Vec_ss> : public FloatBits<Vec_ps> {};
+
+template <> struct FloatBits<Vec_pd> {
+    static constexpr int32_t exp_shift = 52, exp_bias = 1023;
+    static constexpr int64_t exp_mask = 0x7ff, mant_mask = 0x800fffffffffffff,
+        exp1 = 0x3ff0000000000000, exph = 0x3fe0000000000000;
+};
+template <> struct FloatBits<Vec_sd> : public FloatBits<Vec_pd> {};
+
+template <typename VecType>
+inline VecType ldexp(const VecType& x, const typename VecType::fast_int_t& e) {
+    static_assert(VecType::is_float_t);
+
+}
+
+// These implementations of ldexp and frexp only work for finite, non-denormal
+// inputs! Not comparable to standard library versions!
+template <typename F32>
+inline F32 ldexp_f32(const F32& x, const typename F32::equiv_int_t& e) {
+    static_assert(F32::is_float_t && F32::elem_size == 4, "");
+    return (x.bitcast_to_s32() + e.template shift_l_imm<23>()).bitcast_to_f32();
+}
+
+template <typename F64>
+inline F64 ldexp_f64(const F64&x, const typename F64::fast_int_t& e) {
+    static_assert(F64::is_float_t && F64::elem_size == 8, "");
+    return (x.bitcast_to_s64() + e.convert_to_s64().template shift_l_imm<52>())
+        .bitcast_to_f64();
+}
+
+template <typename F32>
+inline typename F32::equiv_int_t exponent_biased_f32(const F32& x) {
+    static_assert(F32::is_float_t && F32::elem_size == 4, "");
+    return (x.bitcast_to_s32().template shift_rl_imm<23> & 0xff);
+}
+
+template <typename F64>
+inline typename F64::fast_int_t exponent_biased_f64(const F64& x) {
+    static_assert(F64::is_float_t && F64::elem_size == 8, "");
+    return typename F64::fast_int_t::from(
+        (x.bitcast_to_s64().template shift_rl_imm<52> & 0x7ff));
+}
+
+template <typename F32>
+inline typename F32::equiv_int_t exponent_f32(const F32& x) {
+    return exponent_biased_f32(x) - 127;
+}
+template <typename F32>
+inline typename F32::equiv_int_t exponent_frexp_f32(const F32& x) {
+    return exponent_biased_f32(x) - 126;
+}
+
+template <typename F64>
+inline typename F64::fast_int_t exponent_f64(const F64& x) {
+    return exponent_biased_f64(x) - 1023;
+}
+template <typename F64>
+inline typename F64::fast_int_t exponent_frexp_f64(const F64& x) {
+    return exponent_biased_f64(x) - 1022;
+}
+
+template <typename F32>
+inline F32 mantissa_f32(const F32& x) {
+    static_assert(F32::is_float_t && F32::elem_size == 4, "");
+    return ((x.bitcast_to_s32() & 0x807fffff) | 0x3f800000).bitcast_to_f32();
+}
+
+template <typename F32>
+inline F32 mantissa_frexp_f32(const F32& x) {
+    static_assert(F32::is_float_t && F32::elem_size == 4, "");
+    return ((x.bitcast_to_s32() & 0x807fffff) | 0x3f000000).bitcast_to_f32();
+}
+
+template <typename F64>
+inline F64 mantissa_f64(const F64& x) {
+    static_assert(F64::is_float_t && F64::elem_size == 8, "");
+    return ((x.bitcast_to_s64() & 0x800fffffffffffff) | 0x3ff0000000000000)
+        .bitcast_to_f64();
+}
+
+template <typename F64>
+inline F64 mantissa_frexp_f64(const F64& x) {
+    static_assert(F64::is_float_t && F64::elem_size == 8, "");
+    return ((x.bitcast_to_s64() & 0x800fffffffffffff) | 0x3fe0000000000000)
+        .bitcast_to_f64();
+}
+
 // Calculate log2(x) for x in [1, 2) using a cubic approximation.
 // Gradient matches gradient of log2() at either end
 static const Poly<Vec_sd, 4> log2_p3_poly {
