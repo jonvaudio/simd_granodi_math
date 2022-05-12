@@ -57,12 +57,12 @@ public:
     ArgType eval(const ArgType& x) const {
         ArgType result;
         if (N == 1) {
-            result = x * ArgType::from(coeff_[0]);
+            result = x * coeff_[0].template to<ArgType>();
         } else {
-            result = x.mul_add(ArgType::from(coeff_[0]),
-                ArgType::from(coeff_[1]));
+            result = x.mul_add(coeff_[0].template to<ArgType>(),
+                coeff_[1].template to<ArgType>());
             for (int32_t i = 2; i < N; ++i) {
-                result = result.mul_add(x, ArgType::from(coeff_[i]));
+                result = result.mul_add(x, coeff_[i].template to<ArgType>());
             }
         }
         return result;
@@ -70,9 +70,9 @@ public:
 
     template <typename ArgType>
     ArgType eval1(const ArgType& x) const {
-        ArgType result {x + ArgType::from(coeff_[0])};
+        ArgType result {x + coeff_[0].template to<ArgType>()};
         for (int32_t i = 1; i < N; ++i) {
-            result = result.mul_add(x, ArgType::from(coeff_[i]));
+            result = result.mul_add(x, coeff_[i].template to<ArgType>());
         }
         return result;
     }
@@ -89,6 +89,73 @@ public:
 // Suitable for musical use in envelope generators etc
 
 namespace sg_math_const {
+
+template <typename VecType> struct FloatBits {};
+
+template <> struct FloatBits<Vec_ps> {
+    static constexpr int32_t exp_shift = 23, exp_mask = 0xff, exp_bias = 127,
+        mant_mask = 0x807fffff, exp1 = 0x3f800000, exph = 0x3f000000;
+};
+template <> struct FloatBits<Vec_ss> : public FloatBits<Vec_ps> {};
+
+template <> struct FloatBits<Vec_pd> {
+    static constexpr int32_t exp_shift = 52, exp_bias = 1023;
+    static constexpr int64_t exp_mask = 0x7ff, mant_mask = 0x800fffffffffffff,
+        exp1 = 0x3ff0000000000000, exph = 0x3fe0000000000000;
+};
+template <> struct FloatBits<Vec_sd> : public FloatBits<Vec_pd> {};
+
+// These implementations of ldexp and frexp only work for finite, non-denormal
+// inputs! Not comparable to standard library versions!
+template <typename VecType>
+inline VecType ldexp(const VecType& x, const typename VecType::fast_int_t& e) {
+    static_assert(VecType::is_float_t, "");
+    using equiv_int = typename VecType::equiv_int_t;
+    using fb = FloatBits<VecType>;
+    return (x.template bitcast<equiv_int>() +
+            e.template to<equiv_int>().template shift_l_imm<fb::exp_shift>())
+        .template bitcast<VecType>();
+}
+
+template <typename VecType>
+inline typename VecType::fast_int_t exponent(const VecType& x) {
+    static_assert(VecType::is_float_t, "");
+    using equiv_int = typename VecType::equiv_int_t;
+    using fast_int = typename VecType::fast_int_t;
+    using fb = FloatBits<VecType>;
+    return ((x.template bitcast<equiv_int>()
+            .template shift_rl_imm<fb::exp_shift>()
+        & fb::exp_mask) - fb::exp_bias).template to<fast_int>();
+}
+
+template <typename VecType>
+inline typename VecType::fast_int_t exponent_frexp(const VecType& x) {
+    static_assert(VecType::is_float_t, "");
+    using equiv_int = typename VecType::equiv_int_t;
+    using fast_int = typename VecType::fast_int_t;
+    using fb = FloatBits<VecType>;
+    return ((x.template bitcast<equiv_int>()
+            .template shift_rl_imm<fb::exp_shift>()
+        & fb::exp_mask) - (fb::exp_bias-1)).template to<fast_int>();
+}
+
+template <typename VecType>
+inline VecType mantissa(const VecType& x) {
+    static_assert(VecType::is_float_t, "");
+    using equiv_int = typename VecType::equiv_int_t;
+    using fb = FloatBits<VecType>;
+    return ((x.template bitcast<equiv_int>() & fb::mant_mask) | fb::exp1)
+        .template bitcast<VecType>();
+}
+
+template <typename VecType>
+inline VecType mantissa_frexp(const VecType& x) {
+    static_assert(VecType::is_float_t, "");
+    using equiv_int = typename VecType::equiv_int_t;
+    using fb = FloatBits<VecType>;
+    return ((x.template bitcast<equiv_int>() & fb::mant_mask) | fb::exph)
+        .template bitcast<VecType>();
+}
 
 // Calculate log2(x) for x in [1, 2) using a cubic approximation.
 // Gradient matches gradient of log2() at either end
@@ -109,19 +176,19 @@ static const Poly<Vec_sd, 4> exp2_p3_poly {
 
 template <typename VecType>
 inline VecType log2_p3(const VecType& x) {
-    VecType exponent = VecType::from(x.exponent_s32()),
-        mantissa = x.mantissa();
+    VecType exponent = sg_math_const::exponent(x).template to<VecType>(),
+        mantissa = sg_math_const::mantissa(x);
     mantissa = sg_math_const::log2_p3_poly.eval(mantissa);
     return (x > 0.0).choose(exponent + mantissa, VecType::minus_infinity());
 }
 
 template <typename VecType>
 inline VecType exp2_p3(const VecType& x) {
-    const auto floor_s32 = x.floor_to_s32();
-    const VecType floor_f = VecType::from(floor_s32);
+    const auto floor = x.template floor<typename VecType::fast_int_t>();
+    const VecType floor_f = floor.template to<VecType>();
     VecType frac = x - floor_f;
     frac = sg_math_const::exp2_p3_poly.eval(frac);
-    return frac.ldexp(floor_s32);
+    return sg_math_const::ldexp(frac, floor);
 }
 
 template <typename VecType>
@@ -168,8 +235,8 @@ inline VecType logf_cm(const VecType& a) {
     using elem = typename VecType::elem_t;
     static_assert(sizeof(elem) == 4, "logf_cm() is for f32 types");
 
-    VecType x = a.mantissa_frexp();
-    VecType e = VecType::from(a.exponent_frexp_s32());
+    VecType x = sg_math_const::mantissa_frexp(a);
+    VecType e = sg_math_const::exponent_frexp(a).template to<VecType>();
     auto x_lt_sqrth = x < elem{sg_math_const::sqrt_half};
     e -= x_lt_sqrth.choose_else_zero(1.0);
     x += x_lt_sqrth.choose_else_zero(x);
@@ -197,14 +264,14 @@ inline VecType expf_cm(const VecType& a) {
 
     VecType x = a;
     VecType z = x * elem{sg_math_const::log2e};
-    auto n = z.convert_to_nearest_s32();
-    z = VecType::from(n);
+    auto n = z.template nearest<typename VecType::equiv_int_t>();
+    z = n.template to<VecType>();
 
     x -= z*elem{sg_math_const::log_q2} + z*elem{sg_math_const::log_q1};
     z = x * x;
     z *= sg_math_const::expf_poly.eval(x);
     z += x + 1.0;
-    return z.ldexp(n);
+    return sg_math_const::ldexp(z, n);
 }
 
 inline Vec_ss exp_cm(const Vec_ss& a) { return expf_cm(a); }
@@ -276,17 +343,17 @@ inline sincos_result<Vec_ps> sincosf_cm(const Vec_ps& xx) {
     Vec_ps cos_signbit = 0.0f, sin_signbit = xx & -0.0f;
     Vec_ps x = xx.abs();
     Vec_pi32 j = (x * static_cast<float>(sg_math_const::four_over_pi))
-        .truncate_to_s32();
-    Vec_ps y = j.convert_to_f32();
+        .truncate<Vec_pi32>();
+    Vec_ps y = j.to<Vec_ps>();
     const Compare_pi32 j_odd {(j & 1) != 0};
     j += j_odd.choose_else_zero(1);
-    y += j_odd.convert_to_cmp_f32().choose_else_zero(1.0f);
+    y += j_odd.to<Compare_ps>().choose_else_zero(1.0f);
     j &= 7;
     const Compare_pi32 j_gt_3 { j > 3 };
     j -= j_gt_3.choose_else_zero(4);
-    cos_signbit ^= j_gt_3.convert_to_cmp_f32().choose_else_zero(-0.0f);
-    sin_signbit ^= j_gt_3.convert_to_cmp_f32().choose_else_zero(-0.0f);
-    const Compare_ps j_gt_1 = (j > 1).convert_to_cmp_f32();
+    cos_signbit ^= j_gt_3.to<Compare_ps>().choose_else_zero(-0.0f);
+    sin_signbit ^= j_gt_3.to<Compare_ps>().choose_else_zero(-0.0f);
+    const Compare_ps j_gt_1 = (j > 1).to<Compare_ps>();
     cos_signbit ^= j_gt_1.choose_else_zero(-0.0f);
     x = ((x - y * sg_math_const::dp1_f) - y * sg_math_const::dp2_f) -
         y * sg_math_const::dp3_f;
@@ -295,7 +362,7 @@ inline sincos_result<Vec_ps> sincosf_cm(const Vec_ps& xx) {
     const Vec_ps cos_result = sg_math_const::cosf_poly.eval(z) * z * z +
             (1.0f - 0.5f*z),
         sin_result = sg_math_const::sinf_poly.eval(z) * z * x + x;
-    const Compare_ps swap = ((j == 1) || (j == 2)).convert_to_cmp_f32();
+    const Compare_ps swap = ((j == 1) || (j == 2)).to<Compare_ps>();
     sincos_result<Vec_ps> result;
     result.cos_result = swap.choose(sin_result, cos_result) ^ cos_signbit;
     result.sin_result = swap.choose(cos_result, sin_result) ^ sin_signbit;
@@ -342,8 +409,8 @@ static const Poly<Vec_pd, 4> log_poly_R_S {
 
 inline Vec_sd log_cm(const Vec_sd& a) {
     if (a.data() <= 0.0) return sg_minus_infinity_f64x1;
-    double x = a.mantissa_frexp().data();
-    int32_t e = a.exponent_frexp_s32().data();
+    double x = sg_math_const::mantissa_frexp(a).data();
+    int32_t e = sg_math_const::exponent_frexp(a).data();
     double y, z;
     if (x < sg_math_const::sqrt_half) {
         e -= 1;
@@ -367,11 +434,11 @@ inline Vec_sd log_cm(const Vec_sd& a) {
 }
 
 inline Vec_pd log_cm(const Vec_pd& a) {
-    Vec_pd x = a.mantissa_frexp();
-    Vec_pi32 e = a.exponent_frexp_s32();
+    Vec_pd x = sg_math_const::mantissa_frexp(a);
+    auto e = sg_math_const::exponent_frexp(a);
     Vec_pd y, z;
     Compare_pd x_lt_sqrth {x < sg_math_const::sqrt_half};
-    e -= x_lt_sqrth.convert_to_cmp_s32().choose_else_zero(1);
+    e -= x_lt_sqrth.to<Vec_pd::fast_int_t::compare_t>().choose_else_zero(1);
     z = x - x_lt_sqrth.choose(0.5, 1.0);
     y = 0.5 * x_lt_sqrth.choose(z, x) + 0.5;
     x = z / y;
@@ -379,7 +446,7 @@ inline Vec_pd log_cm(const Vec_pd& a) {
     Vec_pd R = sg_math_const::log_poly_R.eval(Vec_pd{z}),
         S = sg_math_const::log_poly_S.eval1(Vec_pd{z});
     z = x * ((z * R) / S);
-    const Vec_pd e_pd {Vec_pd::from(e)};
+    const Vec_pd e_pd {e.to<Vec_pd>()};
     y = e_pd;
     z -= y * sg_math_const::log_c1;
     z += x;
@@ -409,30 +476,30 @@ static constexpr double exp_c1 = 6.93145751953125e-1,
 
 inline Vec_sd exp_cm(const Vec_sd& a) {
     Vec_sd x = a.data();
-    Vec_s32x1 n = (x * sg_math_const::log2e).convert_to_nearest_s32();
-    Vec_sd px = n.convert_to_f64();
+    auto n = (x * sg_math_const::log2e).nearest<Vec_sd::fast_int_t>();
+    Vec_sd px = n.to<Vec_f64x1>();
     x -= px*sg_math_const::exp_c1 + px*sg_math_const::exp_c2;
     Vec_sd xx = x * x;
     // {P, Q}
     const Vec_pd poly = Vec_pd{x.data(), 1.0} *
-        sg_math_const::exp_poly_P_Q.eval(Vec_pd::from(xx));
+        sg_math_const::exp_poly_P_Q.eval(xx.to<Vec_pd>());
     const Vec_sd P = poly.d1(), Q = poly.d0();
     x = P / (Q - P);
     x = 2.0*x + 1.0;
-    return x.ldexp(n);
+    return sg_math_const::ldexp(x, n);
 }
 
 inline Vec_pd exp_cm(const Vec_pd& a) {
     Vec_pd x = a;
-    Vec_pi32 n = (x * sg_math_const::log2e).convert_to_nearest_s32();
-    Vec_pd px = Vec_pd::from(n);
+    auto n = (x * sg_math_const::log2e).nearest<Vec_pd::fast_int_t>();
+    Vec_pd px = n.to<Vec_pd>();
     x -= px*sg_math_const::exp_c1 + px*sg_math_const::exp_c2;
     Vec_pd xx = x * x;
     Vec_pd P = x * sg_math_const::exp_poly_P.eval(xx),
         Q = sg_math_const::exp_poly_Q.eval(xx);
     x = P / (Q - P);
     x = 2.0*x + 1.0;
-    return x.ldexp(n);
+    return sg_math_const::ldexp(x, n);
 }
 
 namespace sg_math_const {
@@ -464,8 +531,9 @@ inline sincos_result<Vec_sd> sincos_cm(const Vec_sd& a) {
     Vec_pd signbits { 0.0, (a & -0.0).data() };
     double x = a.abs().data();
     double y = Vec_sd{x * sg_math_const::four_over_pi}
-        .floor_to_s32().convert_to_f64().data();
-    double z = Vec_sd{y * 0.0625}.floor_to_s32().convert_to_f64().data();
+        .floor<Vec_sd::fast_int_t>().to<Vec_f64x1>().data();
+    double z = Vec_sd{y * 0.0625}.floor<Vec_sd::fast_int_t>()
+        .to<Vec_f64x1>().data();
     z = y - 16.0*z;
     int32_t j = static_cast<int32_t>(z);
     if (j & 1) {
@@ -500,28 +568,28 @@ inline sincos_result<Vec_pd> sincos_cm(const Vec_pd& a) {
     Vec_pd cos_signbits {0.0}, sin_signbits{a & -0.0};
     Vec_pd x = a.abs();
     Vec_pd y = (x * sg_math_const::four_over_pi)
-        .floor_to_s32().convert_to_f64();
-    Vec_pd z = (y * 0.0625).floor_to_s32().convert_to_f64();
+        .floor<Vec_pd::fast_int_t>().to<Vec_pd>();
+    Vec_pd z = (y * 0.0625).floor<Vec_pd::fast_int_t>().to<Vec_pd>();
     z = y - 16.0*z;
-    Vec_pi32 j = z.truncate_to_s32();
-    const Compare_pi32 j_odd {(j & 1) != 0};
+    auto j = z.truncate<Vec_pd::fast_int_t>();
+    const auto j_odd {(j & 1) != 0};
     j += j_odd.choose_else_zero(1);
-    y += j_odd.convert_to_cmp_f64().choose_else_zero(1.0);
+    y += j_odd.to<Compare_pd>().choose_else_zero(1.0);
     j &= 7;
-    const Compare_pi32 j_gt_3 {j > 3};
+    const auto j_gt_3 {j > 3};
     j -= j_gt_3.choose_else_zero(4);
-    const Compare_pd j_gt_3_pd = j_gt_3.convert_to_cmp_f64();
+    const Compare_pd j_gt_3_pd = j_gt_3.to<Compare_pd>();
     cos_signbits ^= j_gt_3_pd.choose_else_zero(-0.0);
     sin_signbits ^= j_gt_3_pd.choose_else_zero(-0.0);
-    const Compare_pi32 j_gt_1 {j > 1};
-    cos_signbits ^= j_gt_1.convert_to_cmp_f64().choose_else_zero(-0.0);
+    const auto j_gt_1 {j > 1};
+    cos_signbits ^= j_gt_1.to<Compare_pd>().choose_else_zero(-0.0);
     z = ((x - sg_math_const::dp1*y) - sg_math_const::dp2*y)
         - sg_math_const::dp3*y;
     const Vec_pd zz = z * z;
     const Vec_pd sin_result = z + z*zz*sg_math_const::sin_poly.eval(zz);
     const Vec_pd cos_result = 1.0 - 0.5*zz +
         zz*zz*sg_math_const::cos_poly.eval(zz);
-    const Compare_pd swap_results = ((j == 1) || (j == 2)).convert_to_cmp_f64();
+    const Compare_pd swap_results = ((j == 1) || (j == 2)).to<Compare_pd>();
     sincos_result<Vec_pd> result;
     result.sin_result = swap_results.choose(cos_result, sin_result)
         ^ sin_signbits;
