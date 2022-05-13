@@ -14,20 +14,19 @@
 namespace simd_granodi {
 
 template <typename CoeffType, int32_t N>
-class Poly {
-public:
+struct Poly {
     // Needed public because of .prepend() method
-    CoeffType coeff_[N] {};
+    CoeffType coeff[N] {};
 
     Poly() {}
-    Poly(const std::initializer_list<CoeffType>& coeff) {
+    Poly(const std::initializer_list<CoeffType>& coeff_arg) {
         static_assert(N > 0, "must have at least one coefficient");
         //const bool size_mismatch = coeff.size() != N;
-        assert(coeff.size() == N);
+        assert(coeff_arg.size() == N);
         std::size_t i = 0;
-        for (const CoeffType& c : coeff) {
+        for (const CoeffType& c : coeff_arg) {
             //if (size_mismatch) printf("size mismatch: %.4e\n", c.data());
-            if (i < N) coeff_[i++] = c;
+            if (i < static_cast<std::size_t>(N)) coeff[i++] = c;
         }
     }
 
@@ -36,20 +35,20 @@ public:
     // 0 and 1
     Poly(const Poly<Vec_ss, N>& poly1, const Poly<Vec_ss, N>& poly0) {
         for (int32_t i = 0; i < N; ++i) {
-            coeff_[i] = Vec_ps{0.0f, 0.0f, poly1[i].data(), poly0[i].data()};
+            coeff[i] = Vec_ps{0.0f, 0.0f, poly1[i].data(), poly0[i].data()};
         }
     }
 
     Poly(const Poly<Vec_sd, N>& poly1, const Poly<Vec_sd, N>& poly0) {
         for (int32_t i = 0; i < N; ++i) {
-            coeff_[i] = Vec_pd{poly1[i].data(), poly0[i].data()};
+            coeff[i] = Vec_pd{poly1[i].data(), poly0[i].data()};
         }
     }
 
     Poly<CoeffType, N+1> prepend(const CoeffType& new_coeff0) const {
         Poly<CoeffType, N+1> result;
-        result.coeff_[0] = new_coeff0;
-        for (int32_t i = 0; i < N; ++i) result.coeff_[i+1] = coeff_[i];
+        result.coeff[0] = new_coeff0;
+        for (int32_t i = 0; i < N; ++i) result.coeff[i+1] = coeff[i];
         return result;
     }
 
@@ -57,12 +56,12 @@ public:
     ArgType eval(const ArgType& x) const {
         ArgType result;
         if (N == 1) {
-            result = x * coeff_[0].template to<ArgType>();
+            result = x * coeff[0].template to<ArgType>();
         } else {
-            result = x.mul_add(coeff_[0].template to<ArgType>(),
-                coeff_[1].template to<ArgType>());
+            result = x.mul_add(coeff[0].template to<ArgType>(),
+                coeff[1].template to<ArgType>());
             for (int32_t i = 2; i < N; ++i) {
-                result = result.mul_add(x, coeff_[i].template to<ArgType>());
+                result = result.mul_add(x, coeff[i].template to<ArgType>());
             }
         }
         return result;
@@ -70,16 +69,62 @@ public:
 
     template <typename ArgType>
     ArgType eval1(const ArgType& x) const {
-        ArgType result {x + coeff_[0].template to<ArgType>()};
+        ArgType result {x + coeff[0].template to<ArgType>()};
         for (int32_t i = 1; i < N; ++i) {
-            result = result.mul_add(x, coeff_[i].template to<ArgType>());
+            result = result.mul_add(x, coeff[i].template to<ArgType>());
+        }
+        return result;
+    }
+
+    template <typename ArgType>
+    static ArgType eval_choose2(const Poly<CoeffType, N>& p1,
+        const Poly<CoeffType, N>& p2,
+        const typename ArgType::compare_t& choose_p1,
+        const ArgType& x)
+    {
+        ArgType result;
+        if (N == 1) {
+            result = x * choose_p1.choose(p1.coeff[0].template to<ArgType>(),
+                p2.coeff[0].template to<ArgType>());
+        } else {
+            for (int32_t i = 1; i < N; ++i) {
+                result = result.mul_add(x,
+                    choose_p1.choose(p1.coeff[i].template to<ArgType>(),
+                        p2.coeff[i].template to<ArgType>()));
+            }
+        }
+        return result;
+    }
+
+    template <typename ArgType>
+    static ArgType eval_choose3(const Poly<CoeffType, N>& p1,
+        const Poly<CoeffType, N>& p2,
+        const Poly<CoeffType, N>& p3,
+        const typename ArgType::compare_t& choose_p1,
+        const typename ArgType::compare_t& choose_p2,
+        const ArgType& x)
+    {
+        ArgType result;
+        if (N == 1) {
+            result = x * sg_choose3(choose_p1, choose_p2,
+                p1.coeff[0].template to<ArgType>(),
+                p2.coeff[0].template to<ArgType>(),
+                p3.coeff[0].template to<ArgType>());
+        } else {
+            for (int32_t i = 1; i < N; ++i) {
+                result = result.mul_add(x,
+                    sg_choose3(choose_p1, choose_p2,
+                        p1.coeff[i].template to<ArgType>(),
+                        p2.coeff[i].template to<ArgType>(),
+                        p3.coeff[i].template to<ArgType>()));
+            }
         }
         return result;
     }
 
     const CoeffType& operator[](std::int32_t i) const {
         assert(0 <= i && i < N);
-        return coeff_[i];
+        return coeff[i];
     }
 };
 
@@ -382,6 +427,88 @@ inline Vec_ss sin_cm(const Vec_ss& x) { return sincosf_cm(x).sin_result; }
 inline Vec_ps sin_cm(const Vec_ps& x) { return sincosf_cm(x).sin_result; }
 inline Vec_ss cos_cm(const Vec_ss& x) { return sincosf_cm(x).cos_result; }
 inline Vec_ps cos_cm(const Vec_ps& x) { return sincosf_cm(x).cos_result; }
+
+namespace sg_math_const {
+
+static constexpr double sqrt_2 = 1.4142135623730951;
+
+static const Poly<Vec_ss, 7> sqrtf_poly1 {
+-9.8843065718e-4f,
+ 7.9479950957e-4f,
+-3.5890535377e-3f,
+ 1.1028809744e-2f,
+-4.4195203560e-2f,
+ 3.5355338194e-1f,
+ 1.41421356237f };
+static const Poly<Vec_ss, 6> sqrtf_poly2 {
+ 1.35199291026e-2f,
+-2.26657767832e-2f,
+ 2.78720776889e-2f,
+-3.89582788321e-2f,
+ 6.24811144548e-2f,
+-1.25001503933e-1f };
+static const Poly<Vec_ss, 7> sqrtf_poly2_prepend { sqrtf_poly2.prepend(0.0f) };
+static const Poly<Vec_ss, 7> sqrtf_poly3 {
+-3.9495006054e-1f,
+ 5.1743034569e-1f,
+-4.3214437330e-1f,
+ 3.5310730460e-1f,
+-3.5354581892e-1f,
+ 7.0710676017e-1f,
+ 7.07106781187e-1f };
+
+} // namespace sg_math_const
+
+inline Vec_ss sqrtf_cm(const Vec_ss& a) {
+    if (a.data() <= 0.0f) return 0.0f;
+    auto e = sg_math_const::exponent_frexp(a);
+    Vec_ss x = sg_math_const::mantissa_frexp(a);
+    if (e.data() & 1) {
+        --e;
+        x += x;
+    }
+    e = e.shift_ra_imm<1>();
+    Vec_ss y;
+    if (x.data() > static_cast<float>(sg_math_const::sqrt_2)) {
+        x -= 2.0f;
+        y = sg_math_const::sqrtf_poly1.eval(x);
+    } else if (x.data() > static_cast<float>(sg_math_const::sqrt_half)) {
+        x -= 1.0f;
+        // Brackets needed to match output of vector version
+        y = sg_math_const::sqrtf_poly2.eval(x) * (x * x) + (0.5f*x + 1.0f);
+    } else {
+        x -= 0.5f;
+        y = sg_math_const::sqrtf_poly3.eval(x);
+    }
+    return sg_math_const::ldexp(y, e);
+}
+
+inline Vec_ps sqrtf_cm(const Vec_ps& a) {
+    Vec_pi32 e = sg_math_const::exponent_frexp(a);
+    Vec_ps x = sg_math_const::mantissa_frexp(a);
+    const Compare_pi32 e_odd { (e & 1) != 0 };
+    e -= e_odd.choose_else_zero(1);
+    x += e_odd.to<Compare_ps>().choose_else_zero(x);
+    e = e.shift_ra_imm<1>();
+    Vec_ps y;
+    const Compare_ps x_gt_sqrt2 {x > static_cast<float>(sg_math_const::sqrt_2)};
+    Compare_ps x_gt_sqrth { x > static_cast<float>(sg_math_const::sqrt_half) };
+    x -= sg_choose3(x_gt_sqrt2, x_gt_sqrth,
+        Vec_ps{2.0f}, Vec_ps{1.0f}, Vec_ps{0.5f});
+    y = Poly<Vec_ss, 7>::eval_choose3(sg_math_const::sqrtf_poly1,
+        sg_math_const::sqrtf_poly2_prepend,
+        sg_math_const::sqrtf_poly3,
+        x_gt_sqrt2, x_gt_sqrth, x);
+    // To avoid case overlap (not needed above due to short circuit in
+    // choose3())
+    x_gt_sqrth = x_gt_sqrth && !x_gt_sqrt2;
+    y *= x_gt_sqrth.choose(x * x, 1.0f);
+    y += x_gt_sqrth.choose_else_zero(0.5f*x + 1.0f);
+    return (a > 0.0f).choose_else_zero(sg_math_const::ldexp(y, e));
+}
+
+inline Vec_ss sqrt_cm(const Vec_ss& a) { return sqrtf_cm(a); }
+inline Vec_ps sqrt_cm(const Vec_ps& a) { return sqrtf_cm(a); }
 
 //
 //
