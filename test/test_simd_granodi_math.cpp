@@ -9,8 +9,14 @@ using namespace simd_granodi;
 
 inline float std_log2f(const float x) { return std::log2(x); }
 inline float std_exp2f(const float x) { return std::exp2(x); }
+
 inline float std_logf(const float x) { return std::log(x); }
+inline Vec_ps logf_cm_ps(const Vec_ps& x) { return logf_cm(x); }
+inline Vec_ss logf_cm_ss(const Vec_ss& x) { return logf_cm(x); }
+
 inline float std_expf(const float x) { return std::exp(x); }
+inline Vec_ps expf_cm_ps(const Vec_ps& x) { return expf_cm(x); }
+inline Vec_ss expf_cm_ss(const Vec_ss& x) { return expf_cm(x); }
 
 inline float std_sinf(const float x) { return std::sin(x); }
 inline float std_cosf(const float x) { return std::cos(x); }
@@ -18,6 +24,10 @@ inline Vec_ps sinf_cm_ps(const Vec_ps& x) { return sinf_cm(x); }
 inline Vec_ss sinf_cm_ss(const Vec_ss& x) { return sinf_cm(x); }
 inline Vec_ps cosf_cm_ps(const Vec_ps& x) { return cosf_cm(x); }
 inline Vec_ss cosf_cm_ss(const Vec_ss& x) { return cosf_cm(x); }
+
+inline float std_sqrtf(const float x) { return std::sqrt(x); }
+inline Vec_ps sqrtf_cm_ps(const Vec_ps& x) { return sqrtf_cm(x); }
+inline Vec_ss sqrtf_cm_ss(const Vec_ss& x) { return sqrtf_cm(x); }
 
 inline double std_log(const double x) { return std::log(x); }
 inline Vec_pd log_cm_pd(const Vec_pd& x) { return log_cm(x); }
@@ -34,6 +44,10 @@ inline Vec_sd sin_cm_sd(const Vec_sd& x) { return sin_cm(x); }
 inline double std_cos(const double x) { return std::cos(x); }
 inline Vec_pd cos_cm_pd(const Vec_pd& x) { return cos_cm(x); }
 inline Vec_sd cos_cm_sd(const Vec_sd& x) { return cos_cm(x); }
+
+inline double std_sqrt(const double x) { return std::sqrt(x); }
+inline Vec_pd sqrt_cm_pd(const Vec_pd& x) { return sqrt_cm(x); }
+inline Vec_sd sqrt_cm_sd(const Vec_sd& x) { return sqrt_cm(x); }
 
 inline Vec_sd relative_error(const Vec_sd& reference, const Vec_sd& test) {
     //printf("ref: %.15f, test: %.15f\n", reference.data(), test.data());
@@ -86,7 +100,7 @@ void func_csv(const double start, const double stop, const double interval,
         else fprintf(output, "%.15f,%.15f,", ref_result, scalar_result);
         #endif
         if (std::isfinite(ref_result) != std::isfinite(scalar_result)) {
-            printf("Big problem\n");
+            printf("Big problem: %.4f, %.4f\n", ref_result, scalar_result);
         }
         if (std::isfinite(ref_result) && std::isfinite(scalar_result)) {
             const double re = relative_error(ref_result, scalar_result)
@@ -128,45 +142,58 @@ int main() {
     file_prefix += "_dbg/";
     #endif
 
-    func_csv<Vec_ps, Vec_ss, float>(0.0, 20.0, 0.001,
+    static constexpr double scale = 0.001, log_begin = 0.0, log_end = 20.0,
+        exp_begin = -20.0, exp_end = 20.0,
+        sincos_begin = -16.0, sincos_end = 16.0,
+        sqrt_begin = 0.0, sqrt_end = 20.0;
+
+    func_csv<Vec_ps, Vec_ss, float>(log_begin, log_end, scale,
         file_prefix + "log2_p3",
         std_log2f, log2_p3<Vec_ps>, log2_p3<Vec_ss>);
 
-    func_csv<Vec_ps, Vec_ss, float>(-20.0, 20.0, 0.001,
+    func_csv<Vec_ps, Vec_ss, float>(exp_begin, exp_end, scale,
         file_prefix + "exp2_p3",
         std_exp2f, exp2_p3<Vec_ps>, exp2_p3<Vec_ss>);
 
-    func_csv<Vec_ps, Vec_ss, float>(0.0, 20.0, 0.0001,
+    func_csv<Vec_ps, Vec_ss, float>(log_begin, log_end, scale,
         file_prefix + "logf_cm",
-        std_logf, logf_cm<Vec_ps>, logf_cm<Vec_ss>);
+        std_logf, logf_cm_ps, logf_cm_ss);
 
-    func_csv<Vec_ps, Vec_ss, float>(-20.0, 20.0, 0.001,
+    func_csv<Vec_ps, Vec_ss, float>(exp_begin, exp_end, scale,
         file_prefix + "expf_cm",
-        std_expf, expf_cm<Vec_ps>, expf_cm<Vec_ss>);
+        std_expf, expf_cm_ps, expf_cm_ss);
 
-    func_csv<Vec_ps, Vec_ss, float>(-8.0, 8.0, 0.001,
+    func_csv<Vec_ps, Vec_ss, float>(sincos_begin, sincos_end, scale,
         file_prefix + "sinf_cm",
         std_sinf, sinf_cm_ps, sinf_cm_ss);
 
-    func_csv<Vec_ps, Vec_ss, float>(-8.0, 8.0, 0.001,
+    func_csv<Vec_ps, Vec_ss, float>(sincos_begin, sincos_end, scale,
         file_prefix + "cosf_cm",
         std_cosf, cosf_cm_ps, cosf_cm_ss);
 
-    func_csv<Vec_pd, Vec_sd, double>(0.0, 20.0, 0.001,
+    func_csv<Vec_ps, Vec_ss, float>(sqrt_begin, sqrt_end, scale,
+        file_prefix + "sqrtf_cm",
+        std_sqrtf, sqrtf_cm_ps, sqrtf_cm_ss);
+
+    func_csv<Vec_pd, Vec_sd, double>(log_begin, log_end, scale,
         file_prefix + "log_cm",
         std_log, log_cm_pd, log_cm_sd);
 
-    func_csv<Vec_pd, Vec_sd, double>(-20.0, 20.0, 0.001,
+    func_csv<Vec_pd, Vec_sd, double>(exp_begin, exp_end, scale,
         file_prefix + "exp_cm",
         std_exp, exp_cm_pd, exp_cm_sd);
 
-    func_csv<Vec_pd, Vec_sd, double>(-8.0, 8.0, 0.001,
+    func_csv<Vec_pd, Vec_sd, double>(sincos_begin, sincos_end, scale,
         file_prefix + "sin_cm",
         std_sin, sin_cm_pd, sin_cm_sd);
 
-    func_csv<Vec_pd, Vec_sd, double>(-8.0, 8.0, 0.001,
+    func_csv<Vec_pd, Vec_sd, double>(sincos_begin, sincos_end, scale,
         file_prefix + "cos_cm",
         std_cos, cos_cm_pd, cos_cm_sd);
+
+    func_csv<Vec_pd, Vec_sd, double>(sqrt_begin, sqrt_end, scale,
+        file_prefix + "sqrt_cm",
+        std_sqrt, sqrt_cm_pd, sqrt_cm_sd);
 
     return 0;
 }
