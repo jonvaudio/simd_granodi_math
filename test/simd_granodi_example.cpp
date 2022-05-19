@@ -10,7 +10,7 @@ T square_vec(const T& x) { return x * x; }
 template <typename VecType>
 VecType log2_p3(const VecType& x) {
     // VecType::from() static method aids templated code
-    VecType exponent = VecType::from(x.exponent_s32()),
+    VecType exponent = x.exponent().template to<VecType>(),
         mantissa = x.mantissa();
 
     // Uses FMA if available on hardware
