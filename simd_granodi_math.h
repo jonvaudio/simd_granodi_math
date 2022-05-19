@@ -5,11 +5,77 @@
 
 #include "../simd_granodi/simd_granodi.h"
 
-// WARNING: These functions use a faster frexp() implementation that has not
-// been tested on denormal numbers.
-// They are, in general, written to be fast and used in audio DSP.
-// Also, they do not return correct error values (eg log(-1) returns minus
-// infinity)
+/*
+
+WARNINGS:
+
+- These functions use faster frexp()/ldexp() implementations that do
+  NOT work for denormal (subnormal) numbers.
+
+- They do NOT return correct error values (eg log(-1) returns minus
+  infinity).
+
+- Assertions are used, so you MUST define NDEBUG as a compilier argument for
+  optimized builds.
+
+- They aim to be fast and suitable for use in audio DSP.
+
+SINGLE PRECISION FUNCTIONS:
+
+log2_p3():
+Smooth, but very inaccurate, log2() approximation for singles or doubles
+Returns -inf for x <= 0.0
+
+exp2_p3():
+Smooth, but very inaccurate, exp2() approximation for singles or doubles
+
+exp_p3():
+Simple wrapper that changes the base of exp2_p3() to e.
+
+logf_cm():
+Accurate logf() for singles.
+Returns -inf for x <= 0.0
+
+expf_cm():
+Accuare expf() for singles
+
+sincosf_cm():
+Accurate sinf() and cosf() for singles where x < 8192
+Scalar optimization: calculates sinf() and cosf() in parallel, whereas the
+vector version calculates both sinf() and cosf() (but many of the computations
+are still shared).
+sinf_cm() and cosf_cm() wrap sincosf_cm() and discard unneeded results.
+
+sqrtf_cm():
+Accurate sqrtf() for singles.
+Scalar optimization: uses branching to select the correct polynomial, whereas
+the vector version selects different polynomial coefficients via masking.
+
+DOUBLE PRECISION FUNCTIONS:
+
+Note: all double precision functions are overloaded such that when called with
+a single precision type (ie Vec_ps or Vec_ss), they call their equivalent
+single precision version.
+
+log_cm():
+Accurate log() for doubles
+Scalar optimization: computes numerator and denominator polynomials in parallel.
+
+exp_cm():
+Accurate exp() for doubles
+Scalar optimization: computes numerator and denominator polynomials in parallel.
+
+sincos_cm():
+Accurate sin() and cos() for x < 1.07e9
+Scalar optimization: calculates sin and cos in parallel, whereas the vector
+version calculates both sin() and cos() (but many of the computations
+are still shared).
+sin_cm() and cos_cm() wrap sincos_cm() and discard uneeded results.
+
+sqrt_cm():
+Accurate sqrt for doubles.
+
+*/
 
 namespace simd_granodi {
 
