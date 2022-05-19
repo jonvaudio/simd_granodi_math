@@ -24,7 +24,7 @@ SINGLE PRECISION FUNCTIONS:
 
 log2_p3():
 Smooth, but very inaccurate, log2() approximation for singles or doubles
-Returns -inf for x <= 0.0
+Returns -inf for x <= 0
 
 exp2_p3():
 Smooth, but very inaccurate, exp2() approximation for singles or doubles
@@ -34,7 +34,7 @@ Simple wrapper that changes the base of exp2_p3() to e.
 
 logf_cm():
 Accurate logf() for singles.
-Returns -inf for x <= 0.0
+Returns -inf for x <= 0
 
 expf_cm():
 Accuare expf() for singles
@@ -48,6 +48,7 @@ sinf_cm() and cosf_cm() wrap sincosf_cm() and discard unneeded results.
 
 sqrtf_cm():
 Accurate sqrtf() for singles.
+Returns 0 if x <= +/-0
 Scalar optimization: uses branching to select the correct polynomial, whereas
 the vector version selects different polynomial coefficients via masking.
 
@@ -59,6 +60,7 @@ single precision version.
 
 log_cm():
 Accurate log() for doubles
+Returns -inf for x <= 0
 Scalar optimization: computes numerator and denominator polynomials in parallel.
 
 exp_cm():
@@ -74,6 +76,7 @@ sin_cm() and cos_cm() wrap sincos_cm() and discard uneeded results.
 
 sqrt_cm():
 Accurate sqrt for doubles.
+Returns 0 if x <= +/-0
 
 */
 
@@ -814,10 +817,10 @@ VecType sqrt_impl(const VecType& a) {
         .template to<typename VecType::compare_t>()
         .choose(sqrt_2, 1.0);
     x = sg_ldexp(x, e.template shift_ra_imm<1>());
-    x = 0.5*(x + w/x);
-    x = 0.5*(x + w/x);
-    x = 0.5*(x + w/x);
-    return x;
+    x = 0.5*(x + w.safe_divide_by(x));
+    x = 0.5*(x + w.safe_divide_by(x));
+    x = 0.5*(x + w.safe_divide_by(x));
+    return (a > 0.0).choose_else_zero(x);
 }
 
 } // namespace sg_math_impl
