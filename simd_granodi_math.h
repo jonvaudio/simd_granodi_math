@@ -1,13 +1,41 @@
-#pragma once
+/*
 
-#include <cassert>
-#include <initializer_list>
+Functions taken from the Cephes Math Library and re-implemented to use the
+SIMD_GRANODI header library, to work on 128-bit registers of 2x64 bit or 4x32
+bit floating point.
 
-#include "../simd_granodi/simd_granodi.h"
+The Cephes Math Library is copyright 1984, 1995, 2000 by Stephen L. Moshier
+http://www.moshier.net/
+
+The sincos() implementation's idea of calculating both sin and cos at the same
+time is taken from sse_mathfun.h which is Copyright (C) 2007  Julien Pommier
+http://gruntthepeon.free.fr/ssemath/sse_mathfun.h
+
+Copyright 2022 Jon Ville.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notices shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+*/
 
 /*
 
-WARNINGS:
+!!!! WARNINGS !!!!
 
 - These functions use faster frexp()/ldexp() implementations that do
   NOT work for denormal (subnormal) numbers.
@@ -59,7 +87,8 @@ a single precision type (ie Vec_ps or Vec_ss), they call their equivalent
 single precision version.
 
 log_cm():
-Accurate log() for doubles
+Accurate log() for doubles. (However, does not include every case from the
+Cephes implementation - results will be slightly different).
 Returns -inf for x <= 0
 Scalar optimization: computes numerator and denominator polynomials in parallel.
 
@@ -79,6 +108,13 @@ Accurate sqrt for doubles.
 Returns 0 if x <= +/-0
 
 */
+
+#pragma once
+
+#include <cassert>
+#include <initializer_list>
+
+#include "../simd_granodi/simd_granodi.h"
 
 namespace simd_granodi {
 
