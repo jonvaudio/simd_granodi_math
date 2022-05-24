@@ -63,6 +63,49 @@ inline Vec_sd relative_error(const Vec_sd& reference, const Vec_sd& test) {
     return relative_error;
 }
 
+template <typename VecType>
+void func_error(const double start, const double stop, const int64_t trials,
+    const std::string filename,
+    const std::function<typename VecType::elem_t(typename VecType::elem_t)> func_ref,
+    const std::function<VecType(const VecType&)> func_vec,
+    const std::function<typename VecType::scalar_t(const typename VecType::scalar_t&)> func_scalar)
+{
+    assert(start < stop);
+    assert(trials > 0);
+    double error_max = 0.0, error_total = 0.0, discrep_max = 0.0;
+    for (int64_t i = 0; i <= trials; ++i) {
+        const auto x = static_cast<typename VecType::elem_t>(
+                start + (static_cast<double>(i) / (stop-start))),
+            ref_result = func_ref(x),
+            scalar_result = func_scalar(typename VecType::scalar_t{x}).data();
+        const VecType vec_result = func_vec(VecType{x});
+        // Assert all elements of the vector are the same
+        assert(vec_result.debug_eq(vec_result.template get<0>()));
+        // Check errors are the same
+        if (std::isfinite(ref_result) != std::isfinite(scalar_result) ||
+            std::isfinite(ref_result) != std::isfinite(vec_result.template get<0>()) ||
+            std::isfinite(scalar_result) != std::isfinite(vec_result.template get<0>())) {
+            printf("Big problem, ref, scalar, vec: %.4f, %.4f, %.4f\n",
+                ref_result, scalar_result, vec_result.template get<0>());
+            return;
+        }
+        if (std::isfinite(ref_result)) {
+            // Calculate any scalar / vector discrepancy
+            discrep_max = std::max(discrep_max, static_cast<double>(
+                std::abs(scalar_result - vec_result.template get<0>())));
+            const double re = relative_error(ref_result, scalar_result).data(),
+                re_discrep = relative_error(scalar_result, vec_result.template get<0>()).data();
+            error_total += re * re;
+            if (std::abs(re) > std::abs(error_max)) error_max = re;
+            if (std::abs(re_discrep) > std::abs(discrep_max)) discrep_max = re_discrep;
+        }
+    }
+    const double error_avg = std::sqrt(error_total /
+        static_cast<double>(trials));
+    printf("%s in [%.1e, %.1e] \trms: %.1e\tmax: %.1e\tdiscrep: %.1e\n", filename.data(),
+        start, stop, error_avg, error_max, discrep_max);
+}
+
 template <typename VecType, typename ScalarType, typename FloatType>
 void func_csv(const double start, const double stop, const double interval,
     const std::string filename,
@@ -147,7 +190,31 @@ int main() {
         sincos_begin = -16.0, sincos_end = 16.0,
         sqrt_begin = 0.0, sqrt_end = 20.0;
 
-    func_csv<Vec_ps, Vec_ss, float>(log_begin, log_end, scale,
+    static constexpr int64_t num_trials_base = 100000,
+        #ifdef NDEBUG
+        num_trials = num_trials_base * 100;
+        #else
+        num_trials = num_trials_base;
+        #endif
+
+    static constexpr double log_start_1 = 0.0, log_end_1 = 2.0,
+        log_start_2 = 1.0, log_end_2 = 1e9;
+
+    func_error<Vec_ps>(log_start_1, log_end_1, num_trials,
+        "log2_p3", std_log2f, log2_p3<Vec_ps>, log2_p3<Vec_ss>);
+    func_error<Vec_ps>(log_start_2, log_end_2, num_trials,
+        "log2_p3", std_log2f, log2_p3<Vec_ps>, log2_p3<Vec_ss>);
+
+    printf("\n");
+
+    func_error<Vec_ps>(log_start_1, log_end_1, num_trials,
+        "logf_cm", std_logf, logf_cm_ps, logf_cm_ss);
+    func_error<Vec_ps>(log_start_2, log_end_2, num_trials,
+        "logf_cm", std_logf, logf_cm_ps, logf_cm_ss);
+
+    printf("\n");
+
+    /*func_csv<Vec_ps, Vec_ss, float>(log_begin, log_end, scale,
         file_prefix + "log2_p3",
         std_log2f, log2_p3<Vec_ps>, log2_p3<Vec_ss>);
 
@@ -193,7 +260,7 @@ int main() {
 
     func_csv<Vec_pd, Vec_sd, double>(sqrt_begin, sqrt_end, scale,
         file_prefix + "sqrt_cm",
-        std_sqrt, sqrt_cm_pd, sqrt_cm_sd);
+        std_sqrt, sqrt_cm_pd, sqrt_cm_sd);*/
 
     return 0;
 }
