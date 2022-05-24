@@ -265,7 +265,8 @@ template <> struct FloatBits<Vec_sd> : public FloatBits<Vec_pd> {};
 // These implementations of ldexp and frexp only work for finite, non-denormal
 // inputs! Not comparable to standard library versions!
 template <typename VecType>
-inline VecType sg_ldexp(const VecType& x, const typename VecType::fast_int_t& e) {
+inline VecType sg_ldexp(const VecType& x, const typename VecType::fast_int_t& e)
+{
     static_assert(VecType::is_float_t, "");
     using equiv_int = typename VecType::equiv_int_t;
     using fb = FloatBits<VecType>;
