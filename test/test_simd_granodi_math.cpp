@@ -63,6 +63,16 @@ inline Vec_sd relative_error(const Vec_sd& reference, const Vec_sd& test) {
     return relative_error;
 }
 
+inline double get_arg(const double start, const double end,
+    const int64_t num_trials, const int64_t trial)
+{
+    const double x = start + (end-start) *
+        (static_cast<double>(trial) / static_cast<double>(num_trials));
+    //printf("start: %.1f, end: %.1f, num_trials: %d, current_trial: %d, x: %.1f\n",
+        //start, end, static_cast<int32_t>(num_trials), static_cast<int32_t>(trial), x);
+    return x;
+}
+
 template <typename VecType>
 void func_error(const double start, const double stop, const int64_t trials,
     const std::string filename,
@@ -74,22 +84,22 @@ void func_error(const double start, const double stop, const int64_t trials,
     assert(trials > 0);
     double error_max = 0.0, error_total = 0.0, discrep_max = 0.0;
     for (int64_t i = 0; i <= trials; ++i) {
-        const auto x = static_cast<typename VecType::elem_t>(
-                start + (static_cast<double>(i) / (stop-start))),
+        const auto x = static_cast<typename VecType::elem_t>(get_arg(start, stop, trials, i)),
             ref_result = func_ref(x),
             scalar_result = func_scalar(typename VecType::scalar_t{x}).data();
         const VecType vec_result = func_vec(VecType{x});
         // Assert all elements of the vector are the same
         assert(vec_result.debug_eq(vec_result.template get<0>()));
         // Check errors are the same
-        if (std::isfinite(ref_result) != std::isfinite(scalar_result) ||
+        /*if (std::isfinite(ref_result) != std::isfinite(scalar_result) ||
             std::isfinite(ref_result) != std::isfinite(vec_result.template get<0>()) ||
             std::isfinite(scalar_result) != std::isfinite(vec_result.template get<0>())) {
-            printf("Big problem, ref, scalar, vec: %.4f, %.4f, %.4f\n",
+            printf("Finite disagreement (ref, scalar, vec): %.4f, %.4f, %.4f\n",
                 ref_result, scalar_result, vec_result.template get<0>());
             return;
-        }
-        if (std::isfinite(ref_result)) {
+        }*/
+        if (std::isfinite(ref_result) && std::isfinite(scalar_result)
+            && std::isfinite(vec_result.template get<0>())) {
             // Calculate any scalar / vector discrepancy
             discrep_max = std::max(discrep_max, static_cast<double>(
                 std::abs(scalar_result - vec_result.template get<0>())));
@@ -98,6 +108,8 @@ void func_error(const double start, const double stop, const int64_t trials,
             error_total += re * re;
             if (std::abs(re) > std::abs(error_max)) error_max = re;
             if (std::abs(re_discrep) > std::abs(discrep_max)) discrep_max = re_discrep;
+
+            if (std::abs(re) > 0.9) printf("Large error(x, ref, scalar): %.1e, %.1e, %.1e\n", x, ref_result, scalar_result);
         }
     }
     const double error_avg = std::sqrt(error_total /
@@ -106,69 +118,26 @@ void func_error(const double start, const double stop, const int64_t trials,
         start, stop, error_avg, error_max, discrep_max);
 }
 
-template <typename VecType, typename ScalarType, typename FloatType>
-void func_csv(const double start, const double stop, const double interval,
+template <typename VecType>
+void func_csv(const double start, const double stop, const int64_t trials,
     const std::string filename,
-    const std::function<FloatType(FloatType)> func_ref,
-    const std::function<VecType(const VecType&)> func_vec,
-    const std::function<ScalarType(const ScalarType&)> func_scalar)
+    const std::function<VecType(const VecType&)> func)
 {
-    static_assert(VecType::elem_count == 4 || VecType::elem_count == 2,
-        "VecType must have 2 or 4 elements");
-    static_assert(ScalarType::elem_count == 1, "Scalar type must be scalar");
-    static_assert(sizeof(FloatType) == ScalarType::elem_size,
-        "Wrong float type");
+    (void) start; (void) stop; (void) trials; (void) filename; (void) func;
     #ifdef NDEBUG
     FILE *output = fopen((filename + ".csv").data(), "w");
-    fprintf(output, "reference,result,relative error\n,,\n");
-    #endif
-    double diff_max = 0.0, diff_total = 0.0, result_count = 0.0;
-    for (double i = start; i <= stop; i += interval, result_count += 1.0) {
-        const double xd = static_cast<double>(i);
-        const FloatType x = static_cast<FloatType>(xd),
-            ref_result = func_ref(x),
-            scalar_result = func_scalar(ScalarType{x}).data();
-        const VecType vec_result = func_vec(VecType{x});
-        (void) vec_result; // NDEBUG builds warn vec_result not used
-
-        if (!vec_result.debug_eq(scalar_result)) {
-            printf("%s scalar, vec discrepancy: %.20f, %.20f\n",
-                filename.data(), scalar_result, vec_result.template get<0>());
-        }
-
-        #ifdef NDEBUG
+    for (int64_t i = 0; i <= trials; ++i) {
+        const double x = get_arg(start, stop, trials, i);
+        const auto result = func(x).template get<0>();
         if (VecType::elem_size == 4) {
-            fprintf(output, "%.9f,%.9f,", ref_result, scalar_result);
+            fprintf(output, "%.9f\n", result);
         }
-        else fprintf(output, "%.15f,%.15f,", ref_result, scalar_result);
-        #endif
-        if (std::isfinite(ref_result) != std::isfinite(scalar_result)) {
-            printf("Big problem: %.4f, %.4f\n", ref_result, scalar_result);
+        else {
+            fprintf(output, "%.15f\n", result);
         }
-        if (std::isfinite(ref_result) && std::isfinite(scalar_result)) {
-            const double re = relative_error(ref_result, scalar_result)
-                .data();
-            diff_total += re * re;
-            if (std::abs(re) > std::abs(diff_max)) diff_max = re;
-            #ifdef NDEBUG
-            if (VecType::elem_size == 4) fprintf(output, "%.9e", re);
-            else fprintf(output, "%.15e", re);
-            #endif
-        }
-        #ifdef NDEBUG
-        fprintf(output, "\n");
-        #endif
     }
-    #ifdef NDEBUG
     fclose(output);
     #endif
-    // Check accuracy on optimized builds as results may be different due to
-    // FMA etc
-    //#ifdef NDEBUG
-    const double diff_avg = std::sqrt(diff_total / result_count);
-    printf("%s\trms error: %.1e\tmax error: %.1e\n", filename.data(),
-        diff_avg, diff_max);
-    //#endif
 }
 
 int main() {
@@ -181,29 +150,32 @@ int main() {
 
     #ifdef NDEBUG
     file_prefix += "_opt/";
+    printf("OPTIMIZED RESULTS\n");
     #else
     file_prefix += "_dbg/";
+    printf("DEBUG RESULTS\n");
     #endif
 
-    static constexpr double scale = 0.001, log_begin = 0.0, log_end = 20.0,
-        exp_begin = -20.0, exp_end = 20.0,
-        sincos_begin = -16.0, sincos_end = 16.0,
-        sqrt_begin = 0.0, sqrt_end = 20.0;
+    jon_dsp::ScopedDenormalDisable sdd;
 
     static constexpr int64_t num_trials_base = 100000,
         #ifdef NDEBUG
-        num_trials = num_trials_base * 100;
+        num_trials = num_trials_base * 100,
         #else
-        num_trials = num_trials_base;
+        num_trials = num_trials_base,
         #endif
+        num_trials_csv = 1000;
 
     static constexpr double log_start_1 = 0.0, log_end_1 = 2.0,
-        log_start_2 = 1.0, log_end_2 = 1e9;
+        log_start_2 = 1.0, log_end_2 = 1e9,
+        log_start_csv = 0.0, log_end_csv = 20.0;
 
     func_error<Vec_ps>(log_start_1, log_end_1, num_trials,
         "log2_p3", std_log2f, log2_p3<Vec_ps>, log2_p3<Vec_ss>);
     func_error<Vec_ps>(log_start_2, log_end_2, num_trials,
         "log2_p3", std_log2f, log2_p3<Vec_ps>, log2_p3<Vec_ss>);
+    func_csv<Vec_ss>(log_start_csv, log_end_csv, num_trials_csv,
+        file_prefix + "log2_p3", log2_p3<Vec_ss>);
 
     printf("\n");
 
@@ -211,56 +183,81 @@ int main() {
         "logf_cm", std_logf, logf_cm_ps, logf_cm_ss);
     func_error<Vec_ps>(log_start_2, log_end_2, num_trials,
         "logf_cm", std_logf, logf_cm_ps, logf_cm_ss);
+    func_csv<Vec_ss>(log_start_csv, log_end_csv, num_trials_csv,
+        file_prefix + "logf_cm", logf_cm_ss);
 
     printf("\n");
 
-    /*func_csv<Vec_ps, Vec_ss, float>(log_begin, log_end, scale,
-        file_prefix + "log2_p3",
-        std_log2f, log2_p3<Vec_ps>, log2_p3<Vec_ss>);
+    func_error<Vec_pd>(log_start_1, log_end_1, num_trials,
+        "log_cm", std_log, log_cm_pd, log_cm_sd);
+    func_error<Vec_pd>(log_start_2, log_end_2, num_trials,
+        "log_cm", std_log, log_cm_pd, log_cm_sd);
+    func_csv<Vec_sd>(log_start_csv, log_end_csv, num_trials_csv,
+        file_prefix + "log_cm", log_cm_sd);
 
-    func_csv<Vec_ps, Vec_ss, float>(exp_begin, exp_end, scale,
-        file_prefix + "exp2_p3",
-        std_exp2f, exp2_p3<Vec_ps>, exp2_p3<Vec_ss>);
+    printf("\n");
 
-    func_csv<Vec_ps, Vec_ss, float>(log_begin, log_end, scale,
-        file_prefix + "logf_cm",
-        std_logf, logf_cm_ps, logf_cm_ss);
+    static constexpr double exp_start = -708.0, exp_end = 708.0,
+        exp_start_csv = -20.0, exp_end_csv = 20.0;
 
-    func_csv<Vec_ps, Vec_ss, float>(exp_begin, exp_end, scale,
-        file_prefix + "expf_cm",
-        std_expf, expf_cm_ps, expf_cm_ss);
+    func_error<Vec_ps>(exp_start, exp_end, num_trials,
+        "exp2_p3", std_exp2f, exp2_p3<Vec_ps>, exp2_p3<Vec_ss>);
+    func_csv<Vec_ss>(exp_start_csv, exp_end_csv, num_trials_csv,
+        file_prefix + "exp2_p3", exp2_p3<Vec_ss>);
 
-    func_csv<Vec_ps, Vec_ss, float>(sincos_begin, sincos_end, scale,
-        file_prefix + "sinf_cm",
-        std_sinf, sinf_cm_ps, sinf_cm_ss);
+    func_error<Vec_ps>(exp_start, exp_end, num_trials,
+        "expf_cm", std_expf, expf_cm_ps, expf_cm_ss);
+    func_csv<Vec_ss>(exp_start_csv, exp_end_csv, num_trials_csv,
+        file_prefix + "expf_cm", expf_cm_ss);
 
-    func_csv<Vec_ps, Vec_ss, float>(sincos_begin, sincos_end, scale,
-        file_prefix + "cosf_cm",
-        std_cosf, cosf_cm_ps, cosf_cm_ss);
+    func_error<Vec_pd>(exp_start, exp_end, num_trials,
+        "exp_cm", std_exp, exp_cm_pd, exp_cm_sd);
+    func_csv<Vec_sd>(exp_start_csv, exp_end_csv, num_trials_csv,
+        file_prefix + "exp_cm", exp_cm_sd);
 
-    func_csv<Vec_ps, Vec_ss, float>(sqrt_begin, sqrt_end, scale,
-        file_prefix + "sqrtf_cm",
-        std_sqrtf, sqrtf_cm_ps, sqrtf_cm_ss);
+    printf("\n");
 
-    func_csv<Vec_pd, Vec_sd, double>(log_begin, log_end, scale,
-        file_prefix + "log_cm",
-        std_log, log_cm_pd, log_cm_sd);
+    static constexpr double sincos_start = -4096.0, sincos_end = 4096.0,
+        sincos_start_csv = -7.0, sincos_end_csv = 7.0;
 
-    func_csv<Vec_pd, Vec_sd, double>(exp_begin, exp_end, scale,
-        file_prefix + "exp_cm",
-        std_exp, exp_cm_pd, exp_cm_sd);
+    func_error<Vec_ps>(sincos_start, sincos_end, num_trials,
+        "sinf_cm", std_sinf, sinf_cm_ps, sinf_cm_ss);
+    func_csv<Vec_ss>(sincos_start_csv, sincos_end_csv, num_trials_csv,
+        file_prefix + "sinf_cm", sinf_cm_ss);
 
-    func_csv<Vec_pd, Vec_sd, double>(sincos_begin, sincos_end, scale,
-        file_prefix + "sin_cm",
-        std_sin, sin_cm_pd, sin_cm_sd);
+    func_error<Vec_pd>(sincos_start, sincos_end, num_trials,
+        "sin_cm", std_sin, sin_cm_pd, sin_cm_sd);
+    func_csv<Vec_sd>(sincos_start_csv, sincos_end_csv, num_trials_csv,
+        file_prefix + "sin_cm", sin_cm_sd);
 
-    func_csv<Vec_pd, Vec_sd, double>(sincos_begin, sincos_end, scale,
-        file_prefix + "cos_cm",
-        std_cos, cos_cm_pd, cos_cm_sd);
+    printf("\n");
 
-    func_csv<Vec_pd, Vec_sd, double>(sqrt_begin, sqrt_end, scale,
-        file_prefix + "sqrt_cm",
-        std_sqrt, sqrt_cm_pd, sqrt_cm_sd);*/
+    func_error<Vec_ps>(sincos_start, sincos_end, num_trials,
+        "cosf_cm", std_cosf, cosf_cm_ps, cosf_cm_ss);
+    func_csv<Vec_ss>(sincos_start_csv, sincos_end_csv, num_trials_csv,
+        file_prefix + "cosf_cm", cosf_cm_ss);
+
+    func_error<Vec_pd>(sincos_start, sincos_end, num_trials,
+        "cos_cm", std_cos, cos_cm_pd, cos_cm_sd);
+    func_csv<Vec_sd>(sincos_start_csv, sincos_end_csv, num_trials_csv,
+        file_prefix + "cos_cm", cos_cm_sd);
+
+    printf("\n");
+
+    static constexpr double sqrt_start = 0.0, sqrt_end = 1.0e38,
+        sqrt_start_csv = 0.0, sqrt_end_csv = 20.0;
+
+    func_error<Vec_ps>(sqrt_start, sqrt_end, num_trials,
+        "sqrtf_cm", std_sqrtf, sqrtf_cm_ps, sqrtf_cm_ss);
+    func_csv<Vec_ss>(sqrt_start_csv, sqrt_end_csv, num_trials_csv,
+        file_prefix + "sqrtf_cm", sqrtf_cm_ss);
+
+    func_error<Vec_pd>(sqrt_start, sqrt_end, num_trials,
+        "sqrt_cm", std_sqrt, sqrt_cm_pd, sqrt_cm_sd);
+    func_csv<Vec_sd>(sqrt_start_csv, sqrt_end_csv, num_trials_csv,
+        file_prefix + "sqrt_cm", sqrt_cm_sd);
+
+    printf("\n");
 
     return 0;
 }
