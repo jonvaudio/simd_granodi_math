@@ -1,3 +1,0 @@
-rm test_dbg test_opt example
-#rm test_opt test_dbg example
-#rm test_opt.s test_dbg.s

@@ -1,2 +1,2 @@
-./test_dbg
-./test_opt
+./bin/test_dbg
+./bin/test_opt
