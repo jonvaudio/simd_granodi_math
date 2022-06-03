@@ -703,7 +703,7 @@ static const Poly<Vec_sd, 4>exp_poly_Q {
 3.00198505138664455042e-6,
 2.52448340349684104192e-3,
 2.27265548208155028766e-1,
-2.00000000000000000009e0 };
+2.00000000000000000009 };
 static const Poly<Vec_pd, 4>exp_poly_P_Q {
     exp_poly_P.prepend(0.0), exp_poly_Q
 };
