@@ -649,7 +649,7 @@ static const Poly<Vec_pd, 4> log_poly_R_S {
 inline Vec_sd log_cm(const Vec_sd& a) {
     if (a.data() <= 0.0) return sg_minus_infinity_f64x1;
     double x = sg_math_impl::mantissa_frexp(a).data();
-    int32_t e = sg_math_impl::exponent_frexp(a).data();
+    auto e = sg_math_impl::exponent_frexp(a).data();
     double y, z;
     if (x < sg_math_impl::sqrt_half) {
         e -= 1;
