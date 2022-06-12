@@ -130,7 +130,7 @@ struct Poly {
         static_assert(N > 1, "");
         assert(coeff_arg.size() == N);
         std::size_t i = 0;
-        for (const CoeffType& c : coeff_arg) {
+        for (const CoeffType c : coeff_arg) {
             //if (size_mismatch) printf("size mismatch: %.4e\n", c.data());
             if (i < static_cast<std::size_t>(N)) coeff_[i++] = c;
         }
@@ -152,7 +152,7 @@ struct Poly {
         }
     }
 
-    Poly<CoeffType, N+1> prepend(const CoeffType& new_coeff0) const {
+    Poly<CoeffType, N+1> prepend(const CoeffType new_coeff0) const {
         Poly<CoeffType, N+1> result;
         result.coeff_[0] = new_coeff0;
         for (int32_t i = 0; i < N; ++i) result.coeff_[i+1] = coeff_[i];
@@ -160,7 +160,7 @@ struct Poly {
     }
 
     template <typename ArgType>
-    ArgType eval(const ArgType& x) const {
+    ArgType sg_vectorcall(eval)(const ArgType x) const {
         ArgType result = x.mul_add(coeff_[0].template to<ArgType>(),
             coeff_[1].template to<ArgType>());
         for (int32_t i = 2; i < N; ++i) {
@@ -170,7 +170,7 @@ struct Poly {
     }
 
     template <typename ArgType>
-    ArgType eval1(const ArgType& x) const {
+    ArgType sg_vectorcall(eval1)(const ArgType x) const {
         ArgType result {x + coeff_[0].template to<ArgType>()};
         for (int32_t i = 1; i < N; ++i) {
             result = result.mul_add(x, coeff_[i].template to<ArgType>());
@@ -180,7 +180,7 @@ struct Poly {
 };
 
 template <typename CmpType>
-inline void make_if_elseif_else(const CmpType& cmp1, CmpType& cmp2,
+inline void sg_vectorcall(make_if_elseif_else)(const CmpType& cmp1, CmpType& cmp2,
     CmpType& cmp3)
 {
     cmp2 = cmp2 && !cmp1;
@@ -188,10 +188,10 @@ inline void make_if_elseif_else(const CmpType& cmp1, CmpType& cmp2,
 }
 
 template <typename ArgType>
-inline ArgType choose3(const typename ArgType::compare_t& cmp1,
-    const typename ArgType::compare_t& cmp2,
-    const typename ArgType::compare_t& cmp3,
-    const ArgType& x1, const ArgType& x2, const ArgType& x3)
+inline ArgType sg_vectorcall(choose3)(const typename ArgType::compare_t cmp1,
+    const typename ArgType::compare_t cmp2,
+    const typename ArgType::compare_t cmp3,
+    const ArgType x1, const ArgType x2, const ArgType x3)
 {
     assert((cmp1 != (cmp2 || cmp3)).debug_valid_eq(true));
     assert((cmp2 != (cmp1 || cmp3)).debug_valid_eq(true));
@@ -218,10 +218,10 @@ struct Poly_choose3 {
     }
 
     template <typename ArgType>
-    ArgType eval(const typename ArgType::compare_t& cmp1,
-        const typename ArgType::compare_t& cmp2,
-        const typename ArgType::compare_t& cmp3,
-        const ArgType& x) const
+    ArgType sg_vectorcall(eval)(const typename ArgType::compare_t cmp1,
+        const typename ArgType::compare_t cmp2,
+        const typename ArgType::compare_t cmp3,
+        const ArgType x) const
     {
         ArgType result = x.mul_add(choose3(cmp1, cmp2, cmp3,
                 coeff_[0].template to<ArgType>(),
@@ -265,7 +265,8 @@ template <> struct FloatBits<Vec_sd> : public FloatBits<Vec_pd> {};
 // These implementations of ldexp and frexp only work for finite, non-denormal
 // inputs! Not comparable to standard library versions!
 template <typename VecType>
-inline VecType sg_ldexp(const VecType& x, const typename VecType::fast_int_t& e)
+inline VecType sg_vectorcall(sg_ldexp)(const VecType x,
+    const typename VecType::fast_int_t e)
 {
     static_assert(VecType::is_float_t, "");
     using equiv_int = typename VecType::equiv_int_t;
@@ -276,7 +277,7 @@ inline VecType sg_ldexp(const VecType& x, const typename VecType::fast_int_t& e)
 }
 
 template <typename VecType>
-inline typename VecType::fast_int_t exponent(const VecType& x) {
+inline typename VecType::fast_int_t sg_vectorcall(exponent)(const VecType x) {
     static_assert(VecType::is_float_t, "");
     using equiv_int = typename VecType::equiv_int_t;
     using fast_int = typename VecType::fast_int_t;
@@ -287,7 +288,9 @@ inline typename VecType::fast_int_t exponent(const VecType& x) {
 }
 
 template <typename VecType>
-inline typename VecType::fast_int_t exponent_frexp(const VecType& x) {
+inline typename VecType::fast_int_t sg_vectorcall(exponent_frexp)(
+    const VecType x)
+{
     static_assert(VecType::is_float_t, "");
     using equiv_int = typename VecType::equiv_int_t;
     using fast_int = typename VecType::fast_int_t;
@@ -298,7 +301,7 @@ inline typename VecType::fast_int_t exponent_frexp(const VecType& x) {
 }
 
 template <typename VecType>
-inline VecType mantissa(const VecType& x) {
+inline VecType sg_vectorcall(mantissa)(const VecType x) {
     static_assert(VecType::is_float_t, "");
     using equiv_int = typename VecType::equiv_int_t;
     using fb = FloatBits<VecType>;
@@ -307,7 +310,7 @@ inline VecType mantissa(const VecType& x) {
 }
 
 template <typename VecType>
-inline VecType mantissa_frexp(const VecType& x) {
+inline VecType sg_vectorcall(mantissa_frexp)(const VecType x) {
     static_assert(VecType::is_float_t, "");
     using equiv_int = typename VecType::equiv_int_t;
     using fb = FloatBits<VecType>;
@@ -333,7 +336,7 @@ static const Poly<Vec_sd, 4> exp2_p3_poly {
 } // namespace sg_math_impl
 
 template <typename VecType>
-inline VecType log2_p3(const VecType& x) {
+inline VecType sg_vectorcall(log2_p3)(const VecType x) {
     VecType exponent = sg_math_impl::exponent(x).template to<VecType>(),
         mantissa = sg_math_impl::mantissa(x);
     mantissa = sg_math_impl::log2_p3_poly.eval(mantissa);
@@ -341,7 +344,7 @@ inline VecType log2_p3(const VecType& x) {
 }
 
 template <typename VecType>
-inline VecType exp2_p3(const VecType& x) {
+inline VecType sg_vectorcall(exp2_p3)(const VecType x) {
     const auto floor = x.template floor<typename VecType::fast_int_t>();
     const VecType floor_f = floor.template to<VecType>();
     VecType frac = x - floor_f;
@@ -350,7 +353,7 @@ inline VecType exp2_p3(const VecType& x) {
 }
 
 template <typename VecType>
-inline VecType exp_p3(const VecType& x) {
+inline VecType sg_vectorcall(exp_p3)(const VecType x) {
     using elem = typename VecType::elem_t;
     return exp2_p3(VecType{x * elem{6.931471805599453e-1}});
 }
@@ -387,7 +390,7 @@ static const Poly<Vec_ss, 6> expf_poly {
 5.0000001201e-1f };
 
 template <typename VecType>
-inline VecType logf_impl(const VecType& a) {
+inline VecType sg_vectorcall(logf_impl)(const VecType a) {
     VecType x = mantissa_frexp(a);
     VecType e = exponent_frexp(a).template to<VecType>();
     auto x_lt_sqrth = x < static_cast<float>(sqrt_half);
@@ -409,15 +412,23 @@ inline VecType logf_impl(const VecType& a) {
 
 } // namespace sg_math_impl
 
-inline Vec_ss logf_cm(const Vec_ss& a) { return sg_math_impl::logf_impl(a); }
-inline Vec_ps logf_cm(const Vec_ps& a) { return sg_math_impl::logf_impl(a); }
-inline Vec_ss log_cm(const Vec_ss& a) { return sg_math_impl::logf_impl(a); }
-inline Vec_ps log_cm(const Vec_ps& a) { return sg_math_impl::logf_impl(a); }
+inline Vec_ss sg_vectorcall(logf_cm)(const Vec_ss a) {
+    return sg_math_impl::logf_impl(a);
+}
+inline Vec_ps sg_vectorcall(logf_cm)(const Vec_ps a) {
+    return sg_math_impl::logf_impl(a);
+}
+inline Vec_ss sg_vectorcall(log_cm)(const Vec_ss a) {
+    return sg_math_impl::logf_impl(a);
+}
+inline Vec_ps sg_vectorcall(log_cm)(const Vec_ps a) {
+    return sg_math_impl::logf_impl(a);
+}
 
 namespace sg_math_impl {
 
 template <typename VecType>
-inline VecType expf_impl(const VecType& a) {
+inline VecType sg_vectorcall(expf_impl)(const VecType a) {
     VecType x = a;
     VecType z = x * static_cast<float>(log2e);
     auto n = z.template nearest<typename VecType::equiv_int_t>();
@@ -432,10 +443,18 @@ inline VecType expf_impl(const VecType& a) {
 
 } // namespace sg_math_impl
 
-inline Vec_ss expf_cm(const Vec_ss& a) { return sg_math_impl::expf_impl(a); }
-inline Vec_ps expf_cm(const Vec_ps& a) { return sg_math_impl::expf_impl(a); }
-inline Vec_ss exp_cm(const Vec_ss& a) { return sg_math_impl::expf_impl(a); }
-inline Vec_ps exp_cm(const Vec_ps& a) { return sg_math_impl::expf_impl(a); }
+inline Vec_ss sg_vectorcall(expf_cm)(const Vec_ss a) {
+    return sg_math_impl::expf_impl(a);
+}
+inline Vec_ps sg_vectorcall(expf_cm)(const Vec_ps a) {
+    return sg_math_impl::expf_impl(a);
+}
+inline Vec_ss sg_vectorcall(exp_cm)(const Vec_ss a) {
+    return sg_math_impl::expf_impl(a);
+}
+inline Vec_ps sg_vectorcall(exp_cm)(const Vec_ps a) {
+    return sg_math_impl::expf_impl(a);
+}
 
 namespace sg_math_impl {
 
@@ -463,7 +482,7 @@ template <typename VecType>
 struct sincos_result { VecType sin_result, cos_result; };
 
 // sin and cos for f32 break when x >= 8192
-inline sincos_result<Vec_ss> sincosf_cm(const Vec_ss& xx) {
+inline sincos_result<Vec_ss> sg_vectorcall(sincosf_cm)(const Vec_ss xx) {
     // {cos sign bit, sin sign bit}
     Vec_ps signbits {0.0f, 0.0f, 0.0f, (xx & -0.0f).data()};
     float x = xx.abs().data();
@@ -496,10 +515,14 @@ inline sincos_result<Vec_ss> sincosf_cm(const Vec_ss& xx) {
     return r;
 }
 
-inline Vec_ss sinf_cm(const Vec_ss& x) { return sincosf_cm(x).sin_result; }
-inline Vec_ss cosf_cm(const Vec_ss& x) { return sincosf_cm(x).cos_result; }
+inline Vec_ss sg_vectorcall(sinf_cm)(const Vec_ss x) {
+    return sincosf_cm(x).sin_result;
+}
+inline Vec_ss sg_vectorcall(cosf_cm)(const Vec_ss x) {
+    return sincosf_cm(x).cos_result;
+}
 
-inline sincos_result<Vec_ps> sincosf_cm(const Vec_ps& xx) {
+inline sincos_result<Vec_ps> sg_vectorcall(sincosf_cm)(const Vec_ps xx) {
     Vec_ps cos_signbit = 0.0f, sin_signbit = xx & -0.0f;
     Vec_ps x = xx.abs();
     Vec_pi32 j = (x * static_cast<float>(sg_math_impl::four_over_pi))
@@ -529,19 +552,31 @@ inline sincos_result<Vec_ps> sincosf_cm(const Vec_ps& xx) {
     return result;
 }
 
-inline Vec_ps sinf_cm(const Vec_ps& x) { return sincosf_cm(x).sin_result; }
-inline Vec_ps cosf_cm(const Vec_ps& x) { return sincosf_cm(x).cos_result; }
+inline Vec_ps sg_vectorcall(sinf_cm)(const Vec_ps x) {
+    return sincosf_cm(x).sin_result;
+}
+inline Vec_ps sg_vectorcall(cosf_cm)(const Vec_ps x) {
+    return sincosf_cm(x).cos_result;
+}
 
-inline sincos_result<Vec_ss> sincos_cm(const Vec_ss& xx) {
+inline sincos_result<Vec_ss> sg_vectorcall(sincos_cm)(const Vec_ss xx) {
     return sincosf_cm(xx);
 }
-inline sincos_result<Vec_ps> sincos_cm(const Vec_ps& xx) {
+inline sincos_result<Vec_ps> sg_vectorcall(sincos_cm)(const Vec_ps xx) {
     return sincosf_cm(xx);
 }
-inline Vec_ss sin_cm(const Vec_ss& x) { return sincosf_cm(x).sin_result; }
-inline Vec_ps sin_cm(const Vec_ps& x) { return sincosf_cm(x).sin_result; }
-inline Vec_ss cos_cm(const Vec_ss& x) { return sincosf_cm(x).cos_result; }
-inline Vec_ps cos_cm(const Vec_ps& x) { return sincosf_cm(x).cos_result; }
+inline Vec_ss sg_vectorcall(sin_cm)(const Vec_ss x) {
+    return sincosf_cm(x).sin_result;
+}
+inline Vec_ps sg_vectorcall(sin_cm)(const Vec_ps x) {
+    return sincosf_cm(x).sin_result;
+}
+inline Vec_ss sg_vectorcall(cos_cm)(const Vec_ss x) {
+    return sincosf_cm(x).cos_result;
+}
+inline Vec_ps sg_vectorcall(cos_cm)(const Vec_ps x) {
+    return sincosf_cm(x).cos_result;
+}
 
 namespace sg_math_impl {
 
@@ -575,7 +610,7 @@ static const Poly_choose3<Vec_ss, 7> sqrtf_choose3{ sqrtf_poly1,
 
 } // namespace sg_math_impl
 
-inline Vec_ss sqrtf_cm(const Vec_ss& a) {
+inline Vec_ss sg_vectorcall(sqrtf_cm)(const Vec_ss a) {
     if (a.data() <= 0.0f) return 0.0f;
     auto e = sg_math_impl::exponent_frexp(a);
     Vec_ss x = sg_math_impl::mantissa_frexp(a);
@@ -599,7 +634,7 @@ inline Vec_ss sqrtf_cm(const Vec_ss& a) {
     return sg_math_impl::sg_ldexp(y, e);
 }
 
-inline Vec_ps sqrtf_cm(const Vec_ps& a) {
+inline Vec_ps sg_vectorcall(sqrtf_cm)(const Vec_ps a) {
     Vec_pi32 e = sg_math_impl::exponent_frexp(a);
     Vec_ps x = sg_math_impl::mantissa_frexp(a);
     const Compare_pi32 e_odd { (e & 1) != 0 };
@@ -619,8 +654,12 @@ inline Vec_ps sqrtf_cm(const Vec_ps& a) {
     return (a > 0.0f).choose_else_zero(sg_math_impl::sg_ldexp(y, e));
 }
 
-inline Vec_ss sqrt_cm(const Vec_ss& a) { return sqrtf_cm(a); }
-inline Vec_ps sqrt_cm(const Vec_ps& a) { return sqrtf_cm(a); }
+inline Vec_ss sg_vectorcall(sqrt_cm)(const Vec_ss a) {
+    return sqrtf_cm(a);
+}
+inline Vec_ps sg_vectorcall(sqrt_cm)(const Vec_ps a) {
+    return sqrtf_cm(a);
+}
 
 //
 //
@@ -646,7 +685,7 @@ static const Poly<Vec_pd, 4> log_poly_R_S {
 
 } // namespace sg_math_impl
 
-inline Vec_sd log_cm(const Vec_sd& a) {
+inline Vec_sd sg_vectorcall(log_cm)(const Vec_sd a) {
     if (a.data() <= 0.0) return sg_minus_infinity_f64x1;
     double x = sg_math_impl::mantissa_frexp(a).data();
     auto e = sg_math_impl::exponent_frexp(a).data();
@@ -672,7 +711,7 @@ inline Vec_sd log_cm(const Vec_sd& a) {
     return z;
 }
 
-inline Vec_pd log_cm(const Vec_pd& a) {
+inline Vec_pd sg_vectorcall(log_cm)(const Vec_pd a) {
     Vec_pd x = sg_math_impl::mantissa_frexp(a);
     auto e = sg_math_impl::exponent_frexp(a);
     Vec_pd y, z;
@@ -713,7 +752,7 @@ static constexpr double exp_c1 = 6.93145751953125e-1,
 
 } // namespace sg_math_impl
 
-inline Vec_sd exp_cm(const Vec_sd& a) {
+inline Vec_sd sg_vectorcall(exp_cm)(const Vec_sd a) {
     Vec_sd x = a.data();
     auto n = (x * sg_math_impl::log2e).nearest<Vec_sd::fast_int_t>();
     Vec_sd px = n.to<Vec_f64x1>();
@@ -728,7 +767,7 @@ inline Vec_sd exp_cm(const Vec_sd& a) {
     return sg_math_impl::sg_ldexp(x, n);
 }
 
-inline Vec_pd exp_cm(const Vec_pd& a) {
+inline Vec_pd sg_vectorcall(exp_cm)(const Vec_pd a) {
     Vec_pd x = a;
     auto n = (x * sg_math_impl::log2e).nearest<Vec_pd::fast_int_t>();
     Vec_pd px = n.to<Vec_pd>();
@@ -765,7 +804,7 @@ static constexpr double dp3 = 2.69515142907905952645e-15;
 
 } // namespace sg_math_impl
 
-inline sincos_result<Vec_sd> sincos_cm(const Vec_sd& a) {
+inline sincos_result<Vec_sd> sg_vectorcall(sincos_cm)(const Vec_sd a) {
     // { cos sign bit, sin sign bit }
     Vec_pd signbits { 0.0, (a & -0.0).data() };
     double x = a.abs().data();
@@ -800,10 +839,14 @@ inline sincos_result<Vec_sd> sincos_cm(const Vec_sd& a) {
     return result;
 }
 
-inline Vec_sd sin_cm(const Vec_sd& a) { return sincos_cm(a).sin_result; }
-inline Vec_sd cos_cm(const Vec_sd& a) { return sincos_cm(a).cos_result; }
+inline Vec_sd sg_vectorcall(sin_cm)(const Vec_sd a) {
+    return sincos_cm(a).sin_result;
+}
+inline Vec_sd sg_vectorcall(cos_cm)(const Vec_sd a) {
+    return sincos_cm(a).cos_result;
+}
 
-inline sincos_result<Vec_pd> sincos_cm(const Vec_pd& a) {
+inline sincos_result<Vec_pd> sg_vectorcall(sincos_cm)(const Vec_pd a) {
     Vec_pd cos_signbits {0.0}, sin_signbits{a & -0.0};
     Vec_pd x = a.abs();
     Vec_pd y = (x * sg_math_impl::four_over_pi)
@@ -838,13 +881,17 @@ inline sincos_result<Vec_pd> sincos_cm(const Vec_pd& a) {
     return result;
 }
 
-inline Vec_pd sin_cm(const Vec_pd& a) { return sincos_cm(a).sin_result; }
-inline Vec_pd cos_cm(const Vec_pd& a) { return sincos_cm(a).cos_result; }
+inline Vec_pd sg_vectorcall(sin_cm)(const Vec_pd a) {
+    return sincos_cm(a).sin_result;
+}
+inline Vec_pd sg_vectorcall(cos_cm)(const Vec_pd a) {
+    return sincos_cm(a).cos_result;
+}
 
 namespace sg_math_impl {
 
 template <typename VecType>
-VecType sqrt_impl(const VecType& a) {
+VecType sg_vectorcall(sqrt_impl)(const VecType a) {
     VecType x = a;
     const VecType w = x;
     const VecType z = mantissa_frexp(a);
@@ -862,7 +909,11 @@ VecType sqrt_impl(const VecType& a) {
 
 } // namespace sg_math_impl
 
-inline Vec_pd sqrt_cm(const Vec_pd& a) { return sg_math_impl::sqrt_impl(a); }
-inline Vec_sd sqrt_cm(const Vec_sd& a) { return sg_math_impl::sqrt_impl(a); }
+inline Vec_pd sg_vectorcall(sqrt_cm)(const Vec_pd a) {
+    return sg_math_impl::sqrt_impl(a);
+}
+inline Vec_sd sg_vectorcall(sqrt_cm)(const Vec_sd a) {
+    return sg_math_impl::sqrt_impl(a);
+}
 
 } // namespace simd_granodi

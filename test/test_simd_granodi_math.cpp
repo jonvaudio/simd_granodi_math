@@ -11,45 +11,45 @@ inline float std_log2f(const float x) { return std::log2(x); }
 inline float std_exp2f(const float x) { return std::exp2(x); }
 
 inline float std_logf(const float x) { return std::log(x); }
-inline Vec_ps logf_cm_ps(const Vec_ps& x) { return logf_cm(x); }
-inline Vec_ss logf_cm_ss(const Vec_ss& x) { return logf_cm(x); }
+inline Vec_ps logf_cm_ps(const Vec_ps x) { return logf_cm(x); }
+inline Vec_ss logf_cm_ss(const Vec_ss x) { return logf_cm(x); }
 
 inline float std_expf(const float x) { return std::exp(x); }
-inline Vec_ps expf_cm_ps(const Vec_ps& x) { return expf_cm(x); }
-inline Vec_ss expf_cm_ss(const Vec_ss& x) { return expf_cm(x); }
+inline Vec_ps expf_cm_ps(const Vec_ps x) { return expf_cm(x); }
+inline Vec_ss expf_cm_ss(const Vec_ss x) { return expf_cm(x); }
 
 inline float std_sinf(const float x) { return std::sin(x); }
 inline float std_cosf(const float x) { return std::cos(x); }
-inline Vec_ps sinf_cm_ps(const Vec_ps& x) { return sinf_cm(x); }
-inline Vec_ss sinf_cm_ss(const Vec_ss& x) { return sinf_cm(x); }
-inline Vec_ps cosf_cm_ps(const Vec_ps& x) { return cosf_cm(x); }
-inline Vec_ss cosf_cm_ss(const Vec_ss& x) { return cosf_cm(x); }
+inline Vec_ps sinf_cm_ps(const Vec_ps x) { return sinf_cm(x); }
+inline Vec_ss sinf_cm_ss(const Vec_ss x) { return sinf_cm(x); }
+inline Vec_ps cosf_cm_ps(const Vec_ps x) { return cosf_cm(x); }
+inline Vec_ss cosf_cm_ss(const Vec_ss x) { return cosf_cm(x); }
 
 inline float std_sqrtf(const float x) { return std::sqrt(x); }
-inline Vec_ps sqrtf_cm_ps(const Vec_ps& x) { return sqrtf_cm(x); }
-inline Vec_ss sqrtf_cm_ss(const Vec_ss& x) { return sqrtf_cm(x); }
+inline Vec_ps sqrtf_cm_ps(const Vec_ps x) { return sqrtf_cm(x); }
+inline Vec_ss sqrtf_cm_ss(const Vec_ss x) { return sqrtf_cm(x); }
 
 inline double std_log(const double x) { return std::log(x); }
-inline Vec_pd log_cm_pd(const Vec_pd& x) { return log_cm(x); }
-inline Vec_sd log_cm_sd(const Vec_sd& x) { return log_cm(x); }
+inline Vec_pd log_cm_pd(const Vec_pd x) { return log_cm(x); }
+inline Vec_sd log_cm_sd(const Vec_sd x) { return log_cm(x); }
 
 inline double std_exp(const double x) { return std::exp(x); }
-inline Vec_pd exp_cm_pd(const Vec_pd& x) { return exp_cm(x); }
-inline Vec_sd exp_cm_sd(const Vec_sd& x) { return exp_cm(x); }
+inline Vec_pd exp_cm_pd(const Vec_pd x) { return exp_cm(x); }
+inline Vec_sd exp_cm_sd(const Vec_sd x) { return exp_cm(x); }
 
 inline double std_sin(const double x) { return std::sin(x); }
-inline Vec_pd sin_cm_pd(const Vec_pd& x) { return sin_cm(x); }
-inline Vec_sd sin_cm_sd(const Vec_sd& x) { return sin_cm(x); }
+inline Vec_pd sin_cm_pd(const Vec_pd x) { return sin_cm(x); }
+inline Vec_sd sin_cm_sd(const Vec_sd x) { return sin_cm(x); }
 
 inline double std_cos(const double x) { return std::cos(x); }
-inline Vec_pd cos_cm_pd(const Vec_pd& x) { return cos_cm(x); }
-inline Vec_sd cos_cm_sd(const Vec_sd& x) { return cos_cm(x); }
+inline Vec_pd cos_cm_pd(const Vec_pd x) { return cos_cm(x); }
+inline Vec_sd cos_cm_sd(const Vec_sd x) { return cos_cm(x); }
 
 inline double std_sqrt(const double x) { return std::sqrt(x); }
-inline Vec_pd sqrt_cm_pd(const Vec_pd& x) { return sqrt_cm(x); }
-inline Vec_sd sqrt_cm_sd(const Vec_sd& x) { return sqrt_cm(x); }
+inline Vec_pd sqrt_cm_pd(const Vec_pd x) { return sqrt_cm(x); }
+inline Vec_sd sqrt_cm_sd(const Vec_sd x) { return sqrt_cm(x); }
 
-inline Vec_sd relative_error(const Vec_sd& reference, const Vec_sd& test) {
+inline Vec_sd relative_error(const Vec_sd reference, const Vec_sd test) {
     //printf("ref: %.15f, test: %.15f\n", reference.data(), test.data());
     Vec_sd abs_error = test - reference;
     //printf("absolute error: %.15f\n", abs_error.data());
@@ -77,8 +77,8 @@ template <typename VecType>
 void func_error(const double start, const double stop, const int64_t trials,
     const std::string filename,
     const std::function<typename VecType::elem_t(typename VecType::elem_t)> func_ref,
-    const std::function<VecType(const VecType&)> func_vec,
-    const std::function<typename VecType::scalar_t(const typename VecType::scalar_t&)> func_scalar)
+    const std::function<VecType(const VecType)> func_vec,
+    const std::function<typename VecType::scalar_t(const typename VecType::scalar_t)> func_scalar)
 {
     assert(start < stop);
     assert(trials > 0);
@@ -90,14 +90,6 @@ void func_error(const double start, const double stop, const int64_t trials,
         const VecType vec_result = func_vec(VecType{x});
         // Assert all elements of the vector are the same
         assert(vec_result.debug_eq(vec_result.template get<0>()));
-        // Check errors are the same
-        /*if (std::isfinite(ref_result) != std::isfinite(scalar_result) ||
-            std::isfinite(ref_result) != std::isfinite(vec_result.template get<0>()) ||
-            std::isfinite(scalar_result) != std::isfinite(vec_result.template get<0>())) {
-            printf("Finite disagreement (ref, scalar, vec): %.4f, %.4f, %.4f\n",
-                ref_result, scalar_result, vec_result.template get<0>());
-            return;
-        }*/
         if (std::isfinite(ref_result) && std::isfinite(scalar_result)
             && std::isfinite(vec_result.template get<0>())) {
             // Calculate any scalar / vector discrepancy
@@ -121,7 +113,7 @@ void func_error(const double start, const double stop, const int64_t trials,
 template <typename VecType>
 void func_csv(const double start, const double stop, const int64_t trials,
     const std::string filename,
-    const std::function<VecType(const VecType&)> func)
+    const std::function<VecType(const VecType)> func)
 {
     (void) start; (void) stop; (void) trials; (void) filename; (void) func;
     #ifdef NDEBUG
