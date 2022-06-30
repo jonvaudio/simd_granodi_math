@@ -266,10 +266,10 @@ template <> struct FloatBits<Vec_sd> : public FloatBits<Vec_pd> {};
 // inputs! Not comparable to standard library versions!
 template <typename VecType>
 inline VecType sg_vectorcall(sg_ldexp)(const VecType x,
-    const typename VecType::fast_int_t e)
+    const typename VecType::fast_convert_int_t e)
 {
     static_assert(VecType::is_float_t, "");
-    using equiv_int = typename VecType::equiv_int_t;
+    using equiv_int = typename SGEquivIntType<VecType>::value;
     using fb = FloatBits<VecType>;
     return (x.template bitcast<equiv_int>() +
             e.template to<equiv_int>().template shift_l_imm<fb::exp_shift>())
@@ -277,10 +277,12 @@ inline VecType sg_vectorcall(sg_ldexp)(const VecType x,
 }
 
 template <typename VecType>
-inline typename VecType::fast_int_t sg_vectorcall(exponent)(const VecType x) {
+inline typename VecType::fast_convert_int_t sg_vectorcall(exponent)(
+    const VecType x)
+{
     static_assert(VecType::is_float_t, "");
-    using equiv_int = typename VecType::equiv_int_t;
-    using fast_int = typename VecType::fast_int_t;
+    using equiv_int = typename SGEquivIntType<VecType>::value;
+    using fast_int = typename VecType::fast_convert_int_t;
     using fb = FloatBits<VecType>;
     return ((x.template bitcast<equiv_int>()
             .template shift_rl_imm<fb::exp_shift>()
@@ -288,12 +290,12 @@ inline typename VecType::fast_int_t sg_vectorcall(exponent)(const VecType x) {
 }
 
 template <typename VecType>
-inline typename VecType::fast_int_t sg_vectorcall(exponent_frexp)(
+inline typename VecType::fast_convert_int_t sg_vectorcall(exponent_frexp)(
     const VecType x)
 {
     static_assert(VecType::is_float_t, "");
-    using equiv_int = typename VecType::equiv_int_t;
-    using fast_int = typename VecType::fast_int_t;
+    using equiv_int = typename SGEquivIntType<VecType>::value;
+    using fast_int = typename VecType::fast_convert_int_t;
     using fb = FloatBits<VecType>;
     return ((x.template bitcast<equiv_int>()
             .template shift_rl_imm<fb::exp_shift>()
@@ -303,7 +305,7 @@ inline typename VecType::fast_int_t sg_vectorcall(exponent_frexp)(
 template <typename VecType>
 inline VecType sg_vectorcall(mantissa)(const VecType x) {
     static_assert(VecType::is_float_t, "");
-    using equiv_int = typename VecType::equiv_int_t;
+    using equiv_int = typename SGEquivIntType<VecType>::value;
     using fb = FloatBits<VecType>;
     return ((x.template bitcast<equiv_int>() & fb::mant_mask) | fb::exp1)
         .template bitcast<VecType>();
@@ -312,7 +314,7 @@ inline VecType sg_vectorcall(mantissa)(const VecType x) {
 template <typename VecType>
 inline VecType sg_vectorcall(mantissa_frexp)(const VecType x) {
     static_assert(VecType::is_float_t, "");
-    using equiv_int = typename VecType::equiv_int_t;
+    using equiv_int = typename SGEquivIntType<VecType>::value;
     using fb = FloatBits<VecType>;
     return ((x.template bitcast<equiv_int>() & fb::mant_mask) | fb::exph)
         .template bitcast<VecType>();
@@ -345,7 +347,7 @@ inline VecType sg_vectorcall(log2_p3)(const VecType x) {
 
 template <typename VecType>
 inline VecType sg_vectorcall(exp2_p3)(const VecType x) {
-    const auto floor = x.template floor<typename VecType::fast_int_t>();
+    const auto floor = x.template floor<typename VecType::fast_convert_int_t>();
     const VecType floor_f = floor.template to<VecType>();
     VecType frac = x - floor_f;
     frac = sg_math_impl::exp2_p3_poly.eval(frac);
@@ -415,6 +417,10 @@ inline VecType sg_vectorcall(logf_impl)(const VecType a) {
 inline Vec_ss sg_vectorcall(logf_cm)(const Vec_ss a) {
     return sg_math_impl::logf_impl(a);
 }
+inline Vec_f32x2 sg_vectorcall(logf_cm)(const Vec_f32x2 a) {
+    return sg_math_impl::logf_impl(a.to<Vec_f32x2::fast_register_t>())
+        .to<Vec_f32x2>();
+}
 inline Vec_ps sg_vectorcall(logf_cm)(const Vec_ps a) {
     return sg_math_impl::logf_impl(a);
 }
@@ -431,7 +437,9 @@ template <typename VecType>
 inline VecType sg_vectorcall(expf_impl)(const VecType a) {
     VecType x = a;
     VecType z = x * static_cast<float>(log2e);
-    auto n = z.template nearest<typename VecType::equiv_int_t>();
+    typedef typename SGType<int32_t, VecType::elem_count>::value
+        equiv_int_type;
+    auto n = z.template nearest<equiv_int_type>();
     z = n.template to<VecType>();
 
     x -= z*static_cast<float>(log_q2) + z*static_cast<float>(log_q1);
@@ -716,7 +724,8 @@ inline Vec_pd sg_vectorcall(log_cm)(const Vec_pd a) {
     auto e = sg_math_impl::exponent_frexp(a);
     Vec_pd y, z;
     Compare_pd x_lt_sqrth {x < sg_math_impl::sqrt_half};
-    e -= x_lt_sqrth.to<Vec_pd::fast_int_t::compare_t>().choose_else_zero(1);
+    e -= x_lt_sqrth.to<Vec_pd::fast_convert_int_t::compare_t>()
+        .choose_else_zero(1);
     z = x - x_lt_sqrth.choose(0.5, 1.0);
     y = 0.5 * x_lt_sqrth.choose(z, x) + 0.5;
     x = z / y;
@@ -754,7 +763,7 @@ static constexpr double exp_c1 = 6.93145751953125e-1,
 
 inline Vec_sd sg_vectorcall(exp_cm)(const Vec_sd a) {
     Vec_sd x = a.data();
-    auto n = (x * sg_math_impl::log2e).nearest<Vec_sd::fast_int_t>();
+    auto n = (x * sg_math_impl::log2e).nearest<Vec_sd::fast_convert_int_t>();
     Vec_sd px = n.to<Vec_f64x1>();
     x -= px*sg_math_impl::exp_c1 + px*sg_math_impl::exp_c2;
     Vec_sd xx = x * x;
@@ -769,7 +778,7 @@ inline Vec_sd sg_vectorcall(exp_cm)(const Vec_sd a) {
 
 inline Vec_pd sg_vectorcall(exp_cm)(const Vec_pd a) {
     Vec_pd x = a;
-    auto n = (x * sg_math_impl::log2e).nearest<Vec_pd::fast_int_t>();
+    auto n = (x * sg_math_impl::log2e).nearest<Vec_pd::fast_convert_int_t>();
     Vec_pd px = n.to<Vec_pd>();
     x -= px*sg_math_impl::exp_c1 + px*sg_math_impl::exp_c2;
     Vec_pd xx = x * x;
@@ -809,8 +818,8 @@ inline sincos_result<Vec_sd> sg_vectorcall(sincos_cm)(const Vec_sd a) {
     Vec_pd signbits { 0.0, (a & -0.0).data() };
     double x = a.abs().data();
     double y = Vec_sd{x * sg_math_impl::four_over_pi}
-        .floor<Vec_sd::fast_int_t>().to<Vec_f64x1>().data();
-    double z = Vec_sd{y * 0.0625}.floor<Vec_sd::fast_int_t>()
+        .floor<Vec_sd::fast_convert_int_t>().to<Vec_f64x1>().data();
+    double z = Vec_sd{y * 0.0625}.floor<Vec_sd::fast_convert_int_t>()
         .to<Vec_f64x1>().data();
     z = y - 16.0*z;
     int32_t j = static_cast<int32_t>(z);
@@ -850,10 +859,10 @@ inline sincos_result<Vec_pd> sg_vectorcall(sincos_cm)(const Vec_pd a) {
     Vec_pd cos_signbits {0.0}, sin_signbits{a & -0.0};
     Vec_pd x = a.abs();
     Vec_pd y = (x * sg_math_impl::four_over_pi)
-        .floor<Vec_pd::fast_int_t>().to<Vec_pd>();
-    Vec_pd z = (y * 0.0625).floor<Vec_pd::fast_int_t>().to<Vec_pd>();
+        .floor<Vec_pd::fast_convert_int_t>().to<Vec_pd>();
+    Vec_pd z = (y * 0.0625).floor<Vec_pd::fast_convert_int_t>().to<Vec_pd>();
     z = y - 16.0*z;
-    auto j = z.truncate<Vec_pd::fast_int_t>();
+    auto j = z.truncate<Vec_pd::fast_convert_int_t>();
     const auto j_odd {(j & 1) != 0};
     j += j_odd.choose_else_zero(1);
     y += j_odd.to<Compare_pd>().choose_else_zero(1.0);
