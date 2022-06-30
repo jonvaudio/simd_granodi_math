@@ -73,12 +73,12 @@ inline double get_arg(const double start, const double end,
     return x;
 }
 
-template <typename VecType>
+template <typename VecType, typename ScalarType>
 void func_error(const double start, const double stop, const int64_t trials,
     const std::string filename,
     const std::function<typename VecType::elem_t(typename VecType::elem_t)> func_ref,
     const std::function<VecType(const VecType)> func_vec,
-    const std::function<typename VecType::scalar_t(const typename VecType::scalar_t)> func_scalar)
+    const std::function<ScalarType(const ScalarType)> func_scalar)
 {
     assert(start < stop);
     assert(trials > 0);
@@ -86,7 +86,7 @@ void func_error(const double start, const double stop, const int64_t trials,
     for (int64_t i = 0; i <= trials; ++i) {
         const auto x = static_cast<typename VecType::elem_t>(get_arg(start, stop, trials, i)),
             ref_result = func_ref(x),
-            scalar_result = func_scalar(typename VecType::scalar_t{x}).data();
+            scalar_result = func_scalar(ScalarType{x}).data();
         const VecType vec_result = func_vec(VecType{x});
         // Assert all elements of the vector are the same
         assert(vec_result.debug_eq(vec_result.template get<0>()));
@@ -162,27 +162,27 @@ int main() {
         log_start_2 = 1.0, log_end_2 = 1e9,
         log_start_csv = 0.0, log_end_csv = 20.0;
 
-    func_error<Vec_ps>(log_start_1, log_end_1, num_trials,
+    func_error<Vec_ps, Vec_ss>(log_start_1, log_end_1, num_trials,
         "log2_p3", std_log2f, log2_p3<Vec_ps>, log2_p3<Vec_ss>);
-    func_error<Vec_ps>(log_start_2, log_end_2, num_trials,
+    func_error<Vec_ps, Vec_ss>(log_start_2, log_end_2, num_trials,
         "log2_p3", std_log2f, log2_p3<Vec_ps>, log2_p3<Vec_ss>);
     func_csv<Vec_ss>(log_start_csv, log_end_csv, num_trials_csv,
         file_prefix + "log2_p3", log2_p3<Vec_ss>);
 
     printf("\n");
 
-    func_error<Vec_ps>(log_start_1, log_end_1, num_trials,
+    func_error<Vec_ps, Vec_ss>(log_start_1, log_end_1, num_trials,
         "logf_cm", std_logf, logf_cm_ps, logf_cm_ss);
-    func_error<Vec_ps>(log_start_2, log_end_2, num_trials,
+    func_error<Vec_ps, Vec_ss>(log_start_2, log_end_2, num_trials,
         "logf_cm", std_logf, logf_cm_ps, logf_cm_ss);
     func_csv<Vec_ss>(log_start_csv, log_end_csv, num_trials_csv,
         file_prefix + "logf_cm", logf_cm_ss);
 
     printf("\n");
 
-    func_error<Vec_pd>(log_start_1, log_end_1, num_trials,
+    func_error<Vec_pd, Vec_sd>(log_start_1, log_end_1, num_trials,
         "log_cm", std_log, log_cm_pd, log_cm_sd);
-    func_error<Vec_pd>(log_start_2, log_end_2, num_trials,
+    func_error<Vec_pd, Vec_sd>(log_start_2, log_end_2, num_trials,
         "log_cm", std_log, log_cm_pd, log_cm_sd);
     func_csv<Vec_sd>(log_start_csv, log_end_csv, num_trials_csv,
         file_prefix + "log_cm", log_cm_sd);
@@ -192,17 +192,17 @@ int main() {
     static constexpr double exp_start = -708.0, exp_end = 708.0,
         exp_start_csv = -20.0, exp_end_csv = 20.0;
 
-    func_error<Vec_ps>(exp_start, exp_end, num_trials,
+    func_error<Vec_ps, Vec_ss>(exp_start, exp_end, num_trials,
         "exp2_p3", std_exp2f, exp2_p3<Vec_ps>, exp2_p3<Vec_ss>);
     func_csv<Vec_ss>(exp_start_csv, exp_end_csv, num_trials_csv,
         file_prefix + "exp2_p3", exp2_p3<Vec_ss>);
 
-    func_error<Vec_ps>(exp_start, exp_end, num_trials,
+    func_error<Vec_ps, Vec_ss>(exp_start, exp_end, num_trials,
         "expf_cm", std_expf, expf_cm_ps, expf_cm_ss);
     func_csv<Vec_ss>(exp_start_csv, exp_end_csv, num_trials_csv,
         file_prefix + "expf_cm", expf_cm_ss);
 
-    func_error<Vec_pd>(exp_start, exp_end, num_trials,
+    func_error<Vec_pd, Vec_sd>(exp_start, exp_end, num_trials,
         "exp_cm", std_exp, exp_cm_pd, exp_cm_sd);
     func_csv<Vec_sd>(exp_start_csv, exp_end_csv, num_trials_csv,
         file_prefix + "exp_cm", exp_cm_sd);
@@ -212,24 +212,24 @@ int main() {
     static constexpr double sincos_start = -4096.0, sincos_end = 4096.0,
         sincos_start_csv = -7.0, sincos_end_csv = 7.0;
 
-    func_error<Vec_ps>(sincos_start, sincos_end, num_trials,
+    func_error<Vec_ps, Vec_ss>(sincos_start, sincos_end, num_trials,
         "sinf_cm", std_sinf, sinf_cm_ps, sinf_cm_ss);
     func_csv<Vec_ss>(sincos_start_csv, sincos_end_csv, num_trials_csv,
         file_prefix + "sinf_cm", sinf_cm_ss);
 
-    func_error<Vec_pd>(sincos_start, sincos_end, num_trials,
+    func_error<Vec_pd, Vec_sd>(sincos_start, sincos_end, num_trials,
         "sin_cm", std_sin, sin_cm_pd, sin_cm_sd);
     func_csv<Vec_sd>(sincos_start_csv, sincos_end_csv, num_trials_csv,
         file_prefix + "sin_cm", sin_cm_sd);
 
     printf("\n");
 
-    func_error<Vec_ps>(sincos_start, sincos_end, num_trials,
+    func_error<Vec_ps, Vec_ss>(sincos_start, sincos_end, num_trials,
         "cosf_cm", std_cosf, cosf_cm_ps, cosf_cm_ss);
     func_csv<Vec_ss>(sincos_start_csv, sincos_end_csv, num_trials_csv,
         file_prefix + "cosf_cm", cosf_cm_ss);
 
-    func_error<Vec_pd>(sincos_start, sincos_end, num_trials,
+    func_error<Vec_pd, Vec_sd>(sincos_start, sincos_end, num_trials,
         "cos_cm", std_cos, cos_cm_pd, cos_cm_sd);
     func_csv<Vec_sd>(sincos_start_csv, sincos_end_csv, num_trials_csv,
         file_prefix + "cos_cm", cos_cm_sd);
@@ -239,12 +239,12 @@ int main() {
     static constexpr double sqrt_start = 0.0, sqrt_end = 1.0e38,
         sqrt_start_csv = 0.0, sqrt_end_csv = 20.0;
 
-    func_error<Vec_ps>(sqrt_start, sqrt_end, num_trials,
+    func_error<Vec_ps, Vec_ss>(sqrt_start, sqrt_end, num_trials,
         "sqrtf_cm", std_sqrtf, sqrtf_cm_ps, sqrtf_cm_ss);
     func_csv<Vec_ss>(sqrt_start_csv, sqrt_end_csv, num_trials_csv,
         file_prefix + "sqrtf_cm", sqrtf_cm_ss);
 
-    func_error<Vec_pd>(sqrt_start, sqrt_end, num_trials,
+    func_error<Vec_pd, Vec_sd>(sqrt_start, sqrt_end, num_trials,
         "sqrt_cm", std_sqrt, sqrt_cm_pd, sqrt_cm_sd);
     func_csv<Vec_sd>(sqrt_start_csv, sqrt_end_csv, num_trials_csv,
         file_prefix + "sqrt_cm", sqrt_cm_sd);
