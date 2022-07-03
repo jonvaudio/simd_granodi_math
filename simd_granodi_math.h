@@ -412,6 +412,32 @@ inline Vec_pd sg_vectorcall(exp2_p3)(const Vec_pd x) {
     return sg_math_impl::exp2_p3_impl(x);
 }
 
+inline Vec_ss sg_vectorcall(expf_p3)(const Vec_ss x) {
+    return sg_math_impl::exp_p3_impl(x);
+}
+inline Vec_ss sg_vectorcall(exp_p3)(const Vec_ss x) {
+    return sg_math_impl::exp_p3_impl(x);
+}
+inline Vec_f32x2 sg_vectorcall(expf_p3)(const Vec_f32x2 x) {
+    return sg_math_impl::exp_p3_impl(
+        x.to<typename Vec_f32x2::fast_register_t>()).to<Vec_f32x2>();
+}
+inline Vec_f32x2 sg_vectorcall(exp_p3)(const Vec_f32x2 x) {
+    return expf_p3(x);
+}
+inline Vec_ps sg_vectorcall(expf_p3)(const Vec_ps x) {
+    return sg_math_impl::exp_p3_impl(x);
+}
+inline Vec_ps sg_vectorcall(exp_p3)(const Vec_ps x) {
+    return sg_math_impl::exp_p3_impl(x);
+}
+inline Vec_sd sg_vectorcall(exp_p3)(const Vec_sd x) {
+    return sg_math_impl::exp_p3_impl(x);
+}
+inline Vec_pd sg_vectorcall(exp_p3)(const Vec_pd x) {
+    return sg_math_impl::exp_p3_impl(x);
+}
+
 //
 //
 // CEPHES MATH LIBRARY 32-BIT FLOAT IMPLEMENTATIONS
