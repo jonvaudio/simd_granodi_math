@@ -212,8 +212,8 @@ int main() {
     printf("\n");
 
     static constexpr double exp_start = -708.0, exp_end = 708.0,
-        //exp_start_csv = -20.0, exp_end_csv = 20.0;
-        exp_start_csv = -708.0, exp_end_csv = 708.0;
+        exp_start_csv = -20.0, exp_end_csv = 20.0;
+        //exp_start_csv = -708.0, exp_end_csv = 708.0;
 
     func_error<Vec_ps, Vec_ss>(exp_start, exp_end, num_trials,
         "exp2f_p3", std_exp2f, exp2f_p3_ps, exp2f_p3_ss);
