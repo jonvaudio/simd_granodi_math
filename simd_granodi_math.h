@@ -335,10 +335,8 @@ static const Poly<Vec_sd, 4> exp2_p3_poly {
 6.931471805599453e-1,
 1.0 };
 
-} // namespace sg_math_impl
-
 template <typename VecType>
-inline VecType sg_vectorcall(log2_p3)(const VecType x) {
+inline VecType sg_vectorcall(log2_p3_impl)(const VecType x) {
     VecType exponent = sg_math_impl::exponent(x).template to<VecType>(),
         mantissa = sg_math_impl::mantissa(x);
     mantissa = sg_math_impl::log2_p3_poly.eval(mantissa);
@@ -346,7 +344,7 @@ inline VecType sg_vectorcall(log2_p3)(const VecType x) {
 }
 
 template <typename VecType>
-inline VecType sg_vectorcall(exp2_p3)(const VecType x) {
+inline VecType sg_vectorcall(exp2_p3_impl)(const VecType x) {
     const auto floor = x.template floor<typename VecType::fast_convert_int_t>();
     const VecType floor_f = floor.template to<VecType>();
     VecType frac = x - floor_f;
@@ -355,9 +353,63 @@ inline VecType sg_vectorcall(exp2_p3)(const VecType x) {
 }
 
 template <typename VecType>
-inline VecType sg_vectorcall(exp_p3)(const VecType x) {
+inline VecType sg_vectorcall(exp_p3_impl)(const VecType x) {
     using elem = typename VecType::elem_t;
     return exp2_p3(VecType{x * elem{6.931471805599453e-1}});
+}
+
+} // namespace sg_math_impl
+
+inline Vec_ss sg_vectorcall(log2f_p3)(const Vec_ss x) {
+    return sg_math_impl::log2_p3_impl(x);
+}
+inline Vec_ss sg_vectorcall(log2_p3)(const Vec_ss x) {
+    return sg_math_impl::log2_p3_impl(x);
+}
+inline Vec_f32x2 sg_vectorcall(log2f_p3)(const Vec_f32x2 x) {
+    return sg_math_impl::log2_p3_impl(
+        x.to<typename Vec_f32x2::fast_register_t>()).to<Vec_f32x2>();
+}
+inline Vec_f32x2 sg_vectorcall(log2_p3)(const Vec_f32x2 x) {
+    return log2f_p3(x);
+}
+inline Vec_ps sg_vectorcall(log2f_p3)(const Vec_ps x) {
+    return sg_math_impl::log2_p3_impl(x);
+}
+inline Vec_ps sg_vectorcall(log2_p3)(const Vec_ps x) {
+    return sg_math_impl::log2_p3_impl(x);
+}
+inline Vec_sd sg_vectorcall(log2_p3)(const Vec_sd x) {
+    return sg_math_impl::log2_p3_impl(x);
+}
+inline Vec_pd sg_vectorcall(log2_p3)(const Vec_pd x) {
+    return sg_math_impl::log2_p3_impl(x);
+}
+
+inline Vec_ss sg_vectorcall(exp2f_p3)(const Vec_ss x) {
+    return sg_math_impl::exp2_p3_impl(x);
+}
+inline Vec_ss sg_vectorcall(exp2_p3)(const Vec_ss x) {
+    return sg_math_impl::exp2_p3_impl(x);
+}
+inline Vec_f32x2 sg_vectorcall(exp2f_p3)(const Vec_f32x2 x) {
+    return sg_math_impl::exp2_p3_impl(
+        x.to<typename Vec_f32x2::fast_register_t>()).to<Vec_f32x2>();
+}
+inline Vec_f32x2 sg_vectorcall(exp2_p3)(const Vec_f32x2 x) {
+    return exp2f_p3(x);
+}
+inline Vec_ps sg_vectorcall(exp2f_p3)(const Vec_ps x) {
+    return sg_math_impl::exp2_p3_impl(x);
+}
+inline Vec_ps sg_vectorcall(exp2_p3)(const Vec_ps x) {
+    return sg_math_impl::exp2_p3_impl(x);
+}
+inline Vec_sd sg_vectorcall(exp2_p3)(const Vec_sd x) {
+    return sg_math_impl::exp2_p3_impl(x);
+}
+inline Vec_pd sg_vectorcall(exp2_p3)(const Vec_pd x) {
+    return sg_math_impl::exp2_p3_impl(x);
 }
 
 //
@@ -427,6 +479,9 @@ inline Vec_ps sg_vectorcall(logf_cm)(const Vec_ps a) {
 inline Vec_ss sg_vectorcall(log_cm)(const Vec_ss a) {
     return sg_math_impl::logf_impl(a);
 }
+inline Vec_f32x2 sg_vectorcall(log_cm)(const Vec_f32x2 a) {
+    return logf_cm(a);
+}
 inline Vec_ps sg_vectorcall(log_cm)(const Vec_ps a) {
     return sg_math_impl::logf_impl(a);
 }
@@ -454,11 +509,18 @@ inline VecType sg_vectorcall(expf_impl)(const VecType a) {
 inline Vec_ss sg_vectorcall(expf_cm)(const Vec_ss a) {
     return sg_math_impl::expf_impl(a);
 }
+inline Vec_f32x2 sg_vectorcall(expf_cm)(const Vec_f32x2 a) {
+    return sg_math_impl::expf_impl(a.to<Vec_f32x2::fast_register_t>())
+        .to<Vec_f32x2>();
+}
 inline Vec_ps sg_vectorcall(expf_cm)(const Vec_ps a) {
     return sg_math_impl::expf_impl(a);
 }
 inline Vec_ss sg_vectorcall(exp_cm)(const Vec_ss a) {
     return sg_math_impl::expf_impl(a);
+}
+inline Vec_f32x2 sg_vectorcall(exp_cm)(const Vec_f32x2 a) {
+    return expf_cm(a);
 }
 inline Vec_ps sg_vectorcall(exp_cm)(const Vec_ps a) {
     return sg_math_impl::expf_impl(a);
@@ -560,6 +622,20 @@ inline sincos_result<Vec_ps> sg_vectorcall(sincosf_cm)(const Vec_ps xx) {
     return result;
 }
 
+inline sincos_result<Vec_f32x2> sg_vectorcall(sincosf_cm)(const Vec_f32x2 xx) {
+    const auto result_ps = sincosf_cm(xx.to<Vec_ps>());
+    sincos_result<Vec_f32x2> result;
+    result.sin_result = result_ps.sin_result.to<Vec_f32x2>();
+    result.cos_result = result_ps.cos_result.to<Vec_f32x2>();
+    return result;
+}
+inline Vec_f32x2 sg_vectorcall(sinf_cm)(const Vec_f32x2 x) {
+    return sincosf_cm(x).sin_result;
+}
+inline Vec_f32x2 sg_vectorcall(cosf_cm)(const Vec_f32x2 x) {
+    return sincosf_cm(x).cos_result;
+}
+
 inline Vec_ps sg_vectorcall(sinf_cm)(const Vec_ps x) {
     return sincosf_cm(x).sin_result;
 }
@@ -570,16 +646,25 @@ inline Vec_ps sg_vectorcall(cosf_cm)(const Vec_ps x) {
 inline sincos_result<Vec_ss> sg_vectorcall(sincos_cm)(const Vec_ss xx) {
     return sincosf_cm(xx);
 }
+inline sincos_result<Vec_f32x2> sg_vectorcall(sincos_cm)(const Vec_f32x2 xx) {
+    return sincosf_cm(xx);
+}
 inline sincos_result<Vec_ps> sg_vectorcall(sincos_cm)(const Vec_ps xx) {
     return sincosf_cm(xx);
 }
 inline Vec_ss sg_vectorcall(sin_cm)(const Vec_ss x) {
     return sincosf_cm(x).sin_result;
 }
+inline Vec_f32x2 sg_vectorcall(sin_cm)(const Vec_f32x2 x) {
+    return sincosf_cm(x).sin_result;
+}
 inline Vec_ps sg_vectorcall(sin_cm)(const Vec_ps x) {
     return sincosf_cm(x).sin_result;
 }
 inline Vec_ss sg_vectorcall(cos_cm)(const Vec_ss x) {
+    return sincosf_cm(x).cos_result;
+}
+inline Vec_f32x2 sg_vectorcall(cos_cm)(const Vec_f32x2 x) {
     return sincosf_cm(x).cos_result;
 }
 inline Vec_ps sg_vectorcall(cos_cm)(const Vec_ps x) {
@@ -662,7 +747,14 @@ inline Vec_ps sg_vectorcall(sqrtf_cm)(const Vec_ps a) {
     return (a > 0.0f).choose_else_zero(sg_math_impl::sg_ldexp(y, e));
 }
 
+inline Vec_f32x2 sg_vectorcall(sqrtf_cm)(const Vec_f32x2 a) {
+    return sqrtf_cm(a.to<Vec_ps>()).to<Vec_f32x2>();
+}
+
 inline Vec_ss sg_vectorcall(sqrt_cm)(const Vec_ss a) {
+    return sqrtf_cm(a);
+}
+inline Vec_f32x2 sg_vectorcall(sqrt_cm)(const Vec_f32x2 a) {
     return sqrtf_cm(a);
 }
 inline Vec_ps sg_vectorcall(sqrt_cm)(const Vec_ps a) {

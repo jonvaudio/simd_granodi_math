@@ -1,0 +1,3 @@
+clear
+clang++ -o bin/test_dbg test_simd_granodi_math.cpp -Wall -Wextra -std=c++11 -lm
+clang++ -o bin/test_opt test_simd_granodi_math.cpp -Wall -Wextra -std=c++11 -O3 -lm -DNDEBUG
