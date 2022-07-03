@@ -2,31 +2,43 @@
 #include <cstdio>
 #include <functional>
 #include <string>
-#include "../../jon_dsp/jon_dsp.h"
 #include "../simd_granodi_math.h"
+#include "../../jon_dsp/jon_dsp.h"
 
 using namespace simd_granodi;
 
 inline float std_log2f(const float x) { return std::log2(x); }
+inline Vec_ps log2f_p3_ps(const Vec_ps x) { return log2f_p3(x); }
+inline Vec_f32x2 log2f_p3_f32x2(const Vec_f32x2 x) { return log2f_p3(x); }
+inline Vec_ss log2f_p3_ss(const Vec_ss x) { return log2f_p3(x); }
+
 inline float std_exp2f(const float x) { return std::exp2(x); }
+inline Vec_ps exp2f_p3_ps(const Vec_ps x) { return exp2f_p3(x); }
+inline Vec_f32x2 exp2f_p3_f32x2(const Vec_f32x2 x) { return exp2f_p3(x); }
+inline Vec_ss exp2f_p3_ss(const Vec_ss x) { return exp2f_p3(x); }
 
 inline float std_logf(const float x) { return std::log(x); }
 inline Vec_ps logf_cm_ps(const Vec_ps x) { return logf_cm(x); }
+inline Vec_f32x2 logf_cm_f32x2(const Vec_f32x2 x) { return logf_cm(x); }
 inline Vec_ss logf_cm_ss(const Vec_ss x) { return logf_cm(x); }
 
 inline float std_expf(const float x) { return std::exp(x); }
 inline Vec_ps expf_cm_ps(const Vec_ps x) { return expf_cm(x); }
+inline Vec_f32x2 expf_cm_f32x2(const Vec_f32x2 x) { return expf_cm(x); }
 inline Vec_ss expf_cm_ss(const Vec_ss x) { return expf_cm(x); }
 
 inline float std_sinf(const float x) { return std::sin(x); }
 inline float std_cosf(const float x) { return std::cos(x); }
 inline Vec_ps sinf_cm_ps(const Vec_ps x) { return sinf_cm(x); }
+inline Vec_f32x2 sinf_cm_f32x2(const Vec_f32x2 x) { return sinf_cm(x); }
 inline Vec_ss sinf_cm_ss(const Vec_ss x) { return sinf_cm(x); }
 inline Vec_ps cosf_cm_ps(const Vec_ps x) { return cosf_cm(x); }
+inline Vec_f32x2 cosf_cm_f32x2(const Vec_f32x2 x) { return cosf_cm(x); }
 inline Vec_ss cosf_cm_ss(const Vec_ss x) { return cosf_cm(x); }
 
 inline float std_sqrtf(const float x) { return std::sqrt(x); }
 inline Vec_ps sqrtf_cm_ps(const Vec_ps x) { return sqrtf_cm(x); }
+inline Vec_f32x2 sqrtf_cm_f32x2(const Vec_f32x2 x) { return sqrtf_cm(x); }
 inline Vec_ss sqrtf_cm_ss(const Vec_ss x) { return sqrtf_cm(x); }
 
 inline double std_log(const double x) { return std::log(x); }
@@ -148,8 +160,6 @@ int main() {
     printf("DEBUG RESULTS\n");
     #endif
 
-    jon_dsp::ScopedDenormalDisable sdd;
-
     static constexpr int64_t num_trials_base = 100000,
         #ifdef NDEBUG
         num_trials = num_trials_base * 100,
@@ -162,12 +172,20 @@ int main() {
         log_start_2 = 1.0, log_end_2 = 1e9,
         log_start_csv = 0.0, log_end_csv = 20.0;
 
+    // sg_ldexp is BROKEN if there are any kind of denormals! expf will give
+    // WRONG results!!!
+    jon_dsp::ScopedDenormalDisable sdd;
+
     func_error<Vec_ps, Vec_ss>(log_start_1, log_end_1, num_trials,
-        "log2_p3", std_log2f, log2_p3<Vec_ps>, log2_p3<Vec_ss>);
+        "log2f_p3", std_log2f, log2f_p3_ps, log2f_p3_ss);
     func_error<Vec_ps, Vec_ss>(log_start_2, log_end_2, num_trials,
-        "log2_p3", std_log2f, log2_p3<Vec_ps>, log2_p3<Vec_ss>);
+        "log2f_p3", std_log2f, log2f_p3_ps, log2f_p3_ss);
+    func_error<Vec_f32x2, Vec_ss>(log_start_1, log_end_1, num_trials,
+        "log2f_p3 f32x2", std_log2f, log2f_p3_f32x2, log2f_p3_ss);
+    func_error<Vec_f32x2, Vec_ss>(log_start_2, log_end_2, num_trials,
+        "log2f_p3 f32x2", std_log2f, log2f_p3_f32x2, log2f_p3_ss);
     func_csv<Vec_ss>(log_start_csv, log_end_csv, num_trials_csv,
-        file_prefix + "log2_p3", log2_p3<Vec_ss>);
+        file_prefix + "log2f_p3", log2f_p3_ss);
 
     printf("\n");
 
@@ -175,6 +193,10 @@ int main() {
         "logf_cm", std_logf, logf_cm_ps, logf_cm_ss);
     func_error<Vec_ps, Vec_ss>(log_start_2, log_end_2, num_trials,
         "logf_cm", std_logf, logf_cm_ps, logf_cm_ss);
+    func_error<Vec_f32x2, Vec_ss>(log_start_1, log_end_1, num_trials,
+        "logf_cm f32x2", std_logf, logf_cm_f32x2, logf_cm_ss);
+    func_error<Vec_f32x2, Vec_ss>(log_start_2, log_end_2, num_trials,
+        "logf_cm f32x2", std_logf, logf_cm_f32x2, logf_cm_ss);
     func_csv<Vec_ss>(log_start_csv, log_end_csv, num_trials_csv,
         file_prefix + "logf_cm", logf_cm_ss);
 
@@ -191,14 +213,17 @@ int main() {
 
     static constexpr double exp_start = -708.0, exp_end = 708.0,
         exp_start_csv = -20.0, exp_end_csv = 20.0;
+        //exp_start_csv = -708.0, exp_end_csv = 708.0;
 
     func_error<Vec_ps, Vec_ss>(exp_start, exp_end, num_trials,
-        "exp2_p3", std_exp2f, exp2_p3<Vec_ps>, exp2_p3<Vec_ss>);
+        "exp2f_p3", std_exp2f, exp2f_p3_ps, exp2f_p3_ss);
     func_csv<Vec_ss>(exp_start_csv, exp_end_csv, num_trials_csv,
-        file_prefix + "exp2_p3", exp2_p3<Vec_ss>);
+        file_prefix + "exp2f_p3", exp2f_p3_ss);
 
     func_error<Vec_ps, Vec_ss>(exp_start, exp_end, num_trials,
         "expf_cm", std_expf, expf_cm_ps, expf_cm_ss);
+    func_error<Vec_f32x2, Vec_ss>(exp_start, exp_end, num_trials,
+        "expf_cm f32x2", std_expf, expf_cm_f32x2, expf_cm_ss);
     func_csv<Vec_ss>(exp_start_csv, exp_end_csv, num_trials_csv,
         file_prefix + "expf_cm", expf_cm_ss);
 
@@ -214,6 +239,8 @@ int main() {
 
     func_error<Vec_ps, Vec_ss>(sincos_start, sincos_end, num_trials,
         "sinf_cm", std_sinf, sinf_cm_ps, sinf_cm_ss);
+    func_error<Vec_f32x2, Vec_ss>(sincos_start, sincos_end, num_trials,
+        "sinf_cm f32x2", std_sinf, sinf_cm_f32x2, sinf_cm_ss);
     func_csv<Vec_ss>(sincos_start_csv, sincos_end_csv, num_trials_csv,
         file_prefix + "sinf_cm", sinf_cm_ss);
 
@@ -226,6 +253,8 @@ int main() {
 
     func_error<Vec_ps, Vec_ss>(sincos_start, sincos_end, num_trials,
         "cosf_cm", std_cosf, cosf_cm_ps, cosf_cm_ss);
+    func_error<Vec_f32x2, Vec_ss>(sincos_start, sincos_end, num_trials,
+        "cosf_cm f32x2", std_cosf, cosf_cm_f32x2, cosf_cm_ss);
     func_csv<Vec_ss>(sincos_start_csv, sincos_end_csv, num_trials_csv,
         file_prefix + "cosf_cm", cosf_cm_ss);
 
@@ -241,6 +270,8 @@ int main() {
 
     func_error<Vec_ps, Vec_ss>(sqrt_start, sqrt_end, num_trials,
         "sqrtf_cm", std_sqrtf, sqrtf_cm_ps, sqrtf_cm_ss);
+    func_error<Vec_f32x2, Vec_ss>(sqrt_start, sqrt_end, num_trials,
+        "sqrtf_cm f32x2", std_sqrtf, sqrtf_cm_f32x2, sqrtf_cm_ss);
     func_csv<Vec_ss>(sqrt_start_csv, sqrt_end_csv, num_trials_csv,
         file_prefix + "sqrtf_cm", sqrtf_cm_ss);
 
