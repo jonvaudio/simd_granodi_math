@@ -581,7 +581,7 @@ struct sincos_result { VecType sin_result, cos_result; };
 // sin and cos for f32 break when x >= 8192
 inline sincos_result<Vec_ss> sg_vectorcall(sincosf_cm)(const Vec_ss xx) {
     // {cos sign bit, sin sign bit}
-    Vec_ps signbits {0.0f, 0.0f, 0.0f, (xx & -0.0f).data()};
+    Vec_pi32 signbits {0, 0, 0, xx.bitcast<Vec_s32x1>().data() & (~sg_fp_signmask_s32)};
     float x = xx.abs().data();
     int32_t j = static_cast<int32_t>(x *
         static_cast<float>(sg_math_impl::four_over_pi));
@@ -592,10 +592,10 @@ inline sincos_result<Vec_ss> sg_vectorcall(sincosf_cm)(const Vec_ss xx) {
     }
     j &= 7;
     if (j > 3) {
-        signbits ^= Vec_ps{0.0f, 0.0f, -0.0f, -0.0f};
+        signbits ^= Vec_pi32{0, 0, ~sg_fp_signmask_s32, ~sg_fp_signmask_s32};
         j -= 4;
     }
-    if (j > 1) signbits ^= Vec_ps{0.0f, 0.0f, -0.0f, 0.0f};
+    if (j > 1) signbits ^= Vec_pi32{0, 0, ~sg_fp_signmask_s32, 0};
     x = ((x - y * sg_math_impl::dp1_f) - y * sg_math_impl::dp2_f) -
         y * sg_math_impl::dp3_f;
     const float z = x * x;
@@ -605,7 +605,7 @@ inline sincos_result<Vec_ss> sg_vectorcall(sincosf_cm)(const Vec_ss xx) {
     result *= Vec_ps{0.0f, 0.0f, z, x};
     result += Vec_ps{0.0f, 0.0f, 1.0f - 0.5f*z, x};
     if ((j == 1) || (j == 2)) result = result.shuffle<3, 2, 0, 1>();
-    result ^= signbits;
+    result = (result.bitcast<Vec_pi32>() ^ signbits).bitcast<Vec_ps>();
     sincos_result<Vec_ss> r;
     r.sin_result = result.f0();
     r.cos_result = result.f1();
@@ -620,7 +620,7 @@ inline Vec_ss sg_vectorcall(cosf_cm)(const Vec_ss x) {
 }
 
 inline sincos_result<Vec_ps> sg_vectorcall(sincosf_cm)(const Vec_ps xx) {
-    Vec_ps cos_signbit = 0.0f, sin_signbit = xx & -0.0f;
+    Vec_pi32 cos_signbit = 0, sin_signbit = xx.bitcast<Vec_pi32>() & (~sg_fp_signmask_s32);
     Vec_ps x = xx.abs();
     Vec_pi32 j = (x * static_cast<float>(sg_math_impl::four_over_pi))
         .truncate<Vec_pi32>();
@@ -631,10 +631,10 @@ inline sincos_result<Vec_ps> sg_vectorcall(sincosf_cm)(const Vec_ps xx) {
     j &= 7;
     const Compare_pi32 j_gt_3 { j > 3 };
     j -= j_gt_3.choose_else_zero(4);
-    cos_signbit ^= j_gt_3.to<Compare_ps>().choose_else_zero(-0.0f);
-    sin_signbit ^= j_gt_3.to<Compare_ps>().choose_else_zero(-0.0f);
-    const Compare_ps j_gt_1 = (j > 1).to<Compare_ps>();
-    cos_signbit ^= j_gt_1.choose_else_zero(-0.0f);
+    cos_signbit ^= j_gt_3.choose_else_zero(~sg_fp_signmask_s32);
+    sin_signbit ^= j_gt_3.choose_else_zero(~sg_fp_signmask_s32);
+    const Compare_pi32 j_gt_1 = (j > 1);
+    cos_signbit ^= j_gt_1.choose_else_zero(~sg_fp_signmask_s32);
     x = ((x - y * sg_math_impl::dp1_f) - y * sg_math_impl::dp2_f) -
         y * sg_math_impl::dp3_f;
     const Vec_ps z = x * x;
@@ -644,8 +644,10 @@ inline sincos_result<Vec_ps> sg_vectorcall(sincosf_cm)(const Vec_ps xx) {
         sin_result = sg_math_impl::sinf_poly.eval(z) * z * x + x;
     const Compare_ps swap = ((j == 1) || (j == 2)).to<Compare_ps>();
     sincos_result<Vec_ps> result;
-    result.cos_result = swap.choose(sin_result, cos_result) ^ cos_signbit;
-    result.sin_result = swap.choose(cos_result, sin_result) ^ sin_signbit;
+    result.cos_result = swap.choose(sin_result, cos_result);
+    result.cos_result = (result.cos_result.bitcast<Vec_pi32>() ^ cos_signbit).bitcast<Vec_ps>();
+    result.sin_result = swap.choose(cos_result, sin_result);
+    result.sin_result = (result.sin_result.bitcast<Vec_pi32>() ^ sin_signbit).bitcast<Vec_ps>();
     return result;
 }
 
@@ -934,7 +936,7 @@ static constexpr double dp3 = 2.69515142907905952645e-15;
 
 inline sincos_result<Vec_sd> sg_vectorcall(sincos_cm)(const Vec_sd a) {
     // { cos sign bit, sin sign bit }
-    Vec_pd signbits { 0.0, (a & -0.0).data() };
+    Vec_pi64 signbits { 0, (a.bitcast<Vec_s64x1>() & (~sg_fp_signmask_s64)).data() };
     double x = a.abs().data();
     double y = Vec_sd{x * sg_math_impl::four_over_pi}
         .floor<Vec_sd::fast_convert_int_t>().to<Vec_f64x1>().data();
@@ -948,10 +950,10 @@ inline sincos_result<Vec_sd> sg_vectorcall(sincos_cm)(const Vec_sd a) {
     }
     j &= 7;
     if (j > 3) {
-        signbits ^= Vec_pd{-0.0};
+        signbits ^= Vec_pi64{~sg_fp_signmask_s64};
         j -= 4;
     }
-    if (j > 1) signbits ^= Vec_pd{-0.0, 0.0};
+    if (j > 1) signbits ^= Vec_pi64{~sg_fp_signmask_s64, 0};
     z = ((x - sg_math_impl::dp1*y) - sg_math_impl::dp2*y)
         - sg_math_impl::dp3*y;
     const double zz = z * z;
@@ -959,7 +961,7 @@ inline sincos_result<Vec_sd> sg_vectorcall(sincos_cm)(const Vec_sd a) {
     Vec_pd cossin_poly = Vec_pd{1.0 - 0.5*zz, z} + Vec_pd{zz, z} *
         zz * sg_math_impl::cossin_poly.eval(Vec_pd{zz});
     if ((j == 1) || (j == 2)) cossin_poly = cossin_poly.shuffle<0, 1>();
-    cossin_poly ^= signbits;
+    cossin_poly = (cossin_poly.bitcast<Vec_pi64>() ^ signbits).bitcast<Vec_pd>();
 
     sincos_result<Vec_sd> result;
     result.sin_result = cossin_poly.d0();
@@ -975,7 +977,7 @@ inline Vec_sd sg_vectorcall(cos_cm)(const Vec_sd a) {
 }
 
 inline sincos_result<Vec_pd> sg_vectorcall(sincos_cm)(const Vec_pd a) {
-    Vec_pd cos_signbits {0.0}, sin_signbits{a & -0.0};
+    Vec_pi64 cos_signbits {0}, sin_signbits{(a.bitcast<Vec_pi64>() & (~sg_fp_signmask_s64)).data()};
     Vec_pd x = a.abs();
     Vec_pd y = (x * sg_math_impl::four_over_pi)
         .floor<Vec_pd::fast_convert_int_t>().to<Vec_pd>();
@@ -988,11 +990,11 @@ inline sincos_result<Vec_pd> sg_vectorcall(sincos_cm)(const Vec_pd a) {
     j &= 7;
     const auto j_gt_3 {j > 3};
     j -= j_gt_3.choose_else_zero(4);
-    const Compare_pd j_gt_3_pd = j_gt_3.to<Compare_pd>();
-    cos_signbits ^= j_gt_3_pd.choose_else_zero(-0.0);
-    sin_signbits ^= j_gt_3_pd.choose_else_zero(-0.0);
+    const Compare_pi64 j_gt_3_pi64 = j_gt_3.to<Compare_pi64>();
+    cos_signbits ^= j_gt_3_pi64.choose_else_zero(~sg_fp_signmask_s64);
+    sin_signbits ^= j_gt_3_pi64.choose_else_zero(~sg_fp_signmask_s64);
     const auto j_gt_1 {j > 1};
-    cos_signbits ^= j_gt_1.to<Compare_pd>().choose_else_zero(-0.0);
+    cos_signbits ^= j_gt_1.to<Compare_pi64>().choose_else_zero(~sg_fp_signmask_s64);
     z = ((x - sg_math_impl::dp1*y) - sg_math_impl::dp2*y)
         - sg_math_impl::dp3*y;
     const Vec_pd zz = z * z;
@@ -1001,10 +1003,10 @@ inline sincos_result<Vec_pd> sg_vectorcall(sincos_cm)(const Vec_pd a) {
         zz*zz*sg_math_impl::cos_poly.eval(zz);
     const Compare_pd swap_results = ((j == 1) || (j == 2)).to<Compare_pd>();
     sincos_result<Vec_pd> result;
-    result.sin_result = swap_results.choose(cos_result, sin_result)
-        ^ sin_signbits;
-    result.cos_result = swap_results.choose(sin_result, cos_result)
-        ^ cos_signbits;
+    result.sin_result = swap_results.choose(cos_result, sin_result);
+    result.sin_result = (result.sin_result.bitcast<Vec_pi64>() ^ sin_signbits).bitcast<Vec_pd>();
+    result.cos_result = swap_results.choose(sin_result, cos_result);
+    result.cos_result = (result.cos_result.bitcast<Vec_pi64>() ^ cos_signbits).bitcast<Vec_pd>();
 
     return result;
 }
