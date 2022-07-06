@@ -254,6 +254,7 @@ template <> struct FloatBits<Vec_ps> {
         mant_mask = 0x807fffff, exp1 = 0x3f800000, exph = 0x3f000000;
 };
 template <> struct FloatBits<Vec_ss> : public FloatBits<Vec_ps> {};
+template <> struct FloatBits<Vec_f32x2> : public FloatBits<Vec_ps> {};
 
 template <> struct FloatBits<Vec_pd> {
     static constexpr int32_t exp_shift = 52, exp_bias = 1023;
