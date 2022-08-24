@@ -130,7 +130,7 @@ struct Poly {
         static_assert(N > 1, "");
         assert(coeff_arg.size() == N);
         std::size_t i = 0;
-        for (const CoeffType c : coeff_arg) {
+        for (const CoeffType& c : coeff_arg) {
             //if (size_mismatch) printf("size mismatch: %.4e\n", c.data());
             if (i < static_cast<std::size_t>(N)) coeff_[i++] = c;
         }
